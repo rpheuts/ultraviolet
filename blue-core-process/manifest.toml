@@ -1,0 +1,293 @@
+[module]
+name = "core-process"
+version = "1.0.0"
+namespace = "blue"
+description = "Core process management functionality"
+
+[[methods]]
+path = ["start"]
+description = "Start a new process"
+args_schema = """
+{
+    "type": "object",
+    "properties": {
+        "command": {
+            "type": "string",
+            "description": "Command to execute"
+        },
+        "args": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Command arguments"
+        },
+        "working_dir": {
+            "type": "string",
+            "description": "Working directory (defaults to current directory)"
+        },
+        "evars": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "pattern": "^[^=]+=.+$"
+            },
+            "description": "Environment variables in KEY=VALUE format"
+        }
+    },
+    "required": ["command"]
+}
+"""
+return_schema = """
+{
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Unique process identifier"
+        },
+        "pid": {
+            "type": "number",
+            "description": "Process ID"
+        }
+    }
+}
+"""
+
+[[methods]]
+path = ["stop"]
+description = "Stop a process"
+args_schema = """
+{
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Process ID to stop"
+        }
+    },
+    "required": ["id"]
+}
+"""
+return_schema = """
+{
+    "type": "object",
+    "properties": {
+        "success": {
+            "type": "boolean",
+            "description": "Whether the process was stopped successfully"
+        },
+        "exit_code": {
+            "type": ["number", "null"],
+            "description": "Process exit code if available"
+        }
+    }
+}
+"""
+
+[[methods]]
+path = ["remove"]
+description = "Remove a process from the list (stops if running)"
+args_schema = """
+{
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Process ID to remove (not required if --all is used)"
+        },
+        "force": {
+            "type": "boolean",
+            "description": "Skip graceful stop and force kill immediately",
+            "default": false
+        },
+        "all": {
+            "type": "boolean",
+            "description": "Remove all exited processes",
+            "default": false
+        }
+    },
+    "oneOf": [
+        { "required": ["id"] },
+        { "required": ["all"] }
+    ]
+}
+"""
+return_schema = """
+{
+    "type": "object",
+    "properties": {
+        "success": {
+            "type": "boolean",
+            "description": "Whether the process was removed successfully"
+        },
+        "removed_count": {
+            "type": "number",
+            "description": "Number of processes removed (when using --all)"
+        }
+    }
+}
+"""
+
+[[methods]]
+path = ["logs"]
+description = "Get process output logs"
+args_schema = """
+{
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Process ID to get logs for"
+        },
+        "stream": {
+            "type": "string",
+            "enum": ["stdout", "stderr", "both"],
+            "description": "Which output stream to read",
+            "default": "both"
+        },
+        "lines": {
+            "type": "number",
+            "description": "Number of lines to return (from end)",
+            "default": 100
+        }
+    },
+    "required": ["id"]
+}
+"""
+return_schema = """
+{
+    "type": "object",
+    "properties": {
+        "stdout": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Standard output lines"
+        },
+        "stderr": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Standard error lines"
+        }
+    }
+}
+"""
+display = """{ 
+    "type": "text",
+    "source": "stdout",
+    "join": "\\n"
+}"""
+
+[[methods]]
+path = ["follow"]
+description = "Follow process output in real-time"
+args_schema = """
+{
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Process ID to follow"
+        },
+        "stream": {
+            "type": "string",
+            "enum": ["stdout", "stderr", "both"],
+            "description": "Which output stream to follow",
+            "default": "both"
+        }
+    },
+    "required": ["id"]
+}
+"""
+display = """{ "type": "stream" }"""
+
+[[methods]]
+path = ["list"]
+description = "List all managed processes"
+return_schema = """
+{
+    "type": "object",
+    "properties": {
+        "processes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique process identifier"
+                    },
+                    "pid": {
+                        "type": ["number", "null"],
+                        "description": "Process ID if running"
+                    },
+                    "started_at": {
+                        "type": ["string", "null"],
+                        "format": "date-time",
+                        "description": "When the process was started"
+                    },
+                    "exit_code": {
+                        "type": ["number", "null"],
+                        "description": "Process exit code if terminated"
+                    },
+                    "exit_time": {
+                        "type": ["string", "null"],
+                        "format": "date-time",
+                        "description": "When the process terminated"
+                    },
+                    "config": {
+                        "type": "object",
+                        "properties": {
+                            "command": {
+                                "type": "string",
+                                "description": "Full command with arguments"
+                            },
+                            "working_dir": {
+                                "type": "string",
+                                "description": "Working directory"
+                            },
+                            "output_dir": {
+                                "type": "string",
+                                "description": "Output directory for logs"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+"""
+display = """{ 
+    "type": "table",
+    "source": "processes",
+    "columns": [
+        {
+            "title": "ID",
+            "value": "id"
+        },
+        {
+            "title": "PID",
+            "value": "pid",
+            "align": "right"
+        },
+        {
+            "title": "Started",
+            "value": "started_at"
+        },
+        {
+            "title": "Exit Code",
+            "value": "exit_code",
+            "align": "right"
+        },
+        {
+            "title": "Command",
+            "value": "config.command",
+            "max_width": 50
+        }
+    ]
+}"""

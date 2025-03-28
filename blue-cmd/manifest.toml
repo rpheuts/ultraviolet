@@ -1,0 +1,96 @@
+[module]
+name = "cmd"
+version = "1.0.0"
+namespace = "blue"
+description = "Execute commands and scripts with streaming output"
+
+[[methods]]
+path = ["script"]
+description = "Execute a script file"
+args_schema = """
+{
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Path to the script file"
+        },
+        "args": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "description": "Script arguments"
+        },
+        "env": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            },
+            "description": "Environment variables"
+        },
+        "shell": {
+            "type": "string",
+            "description": "Shell to use (defaults to bash)",
+            "enum": ["bash", "sh", "zsh"],
+            "default": "bash"
+        }
+    },
+    "required": ["path"]
+}
+"""
+return_schema = """
+{
+    "type": "object",
+    "properties": {
+        "status": {
+            "type": "number",
+            "description": "Exit status code"
+        }
+    }
+}
+"""
+display = """{ 
+    "type": "stream",
+    "stderr_prefix": null,
+    "color_stderr": false,
+    "fallback": { "type": "raw" }
+}"""
+
+[[methods]]
+path = ["run"]
+description = "Run a command with arguments"
+args_schema = """
+{
+    "type": "object",
+    "properties": {
+        "command": {
+            "type": "string",
+            "description": "Command to execute"
+        },
+        "env": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "string"
+            },
+            "description": "Environment variables"
+        }
+    },
+    "required": ["command"]
+}
+"""
+return_schema = """
+{
+    "type": "object",
+    "properties": {
+        "status": {
+            "type": "number",
+            "description": "Exit status code"
+        }
+    }
+}
+"""
+display = """{ 
+    "type": "stream",
+    "fallback": { "type": "raw" }
+}"""

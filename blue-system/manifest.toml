@@ -1,0 +1,115 @@
+[module]
+name = "system"
+version = "1.0.0"
+namespace = "blue"
+description = "System information and metrics"
+
+[[methods]]
+path = ["stats"]
+description = "Get detailed system statistics with raw numbers"
+return_schema = '''
+{
+    "type": "object",
+    "properties": {
+        "architecture": { "type": "string" },
+        "os_type": { "type": "string" },
+        "os_version": { "type": "string" },
+        "hostname": { "type": "string" },
+        "cpu_cores": { "type": "integer" },
+        "memory_total": { "type": "integer" },
+        "memory_available": { "type": "integer" },
+        "swap_total": { "type": "integer" },
+        "swap_free": { "type": "integer" },
+        "cpu_usage": { "type": "number" },
+        "storage_devices": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "device": { "type": "string" },
+                    "mount_point": { "type": "string" },
+                    "filesystem": { "type": "string" },
+                    "total_bytes": { "type": "integer" },
+                    "available_bytes": { "type": "integer" },
+                    "percent_used": { "type": "number" }
+                }
+            }
+        }
+    }
+}'''
+
+[[methods]]
+path = ["info"]
+description = "Get human-readable system information"
+return_schema = '''
+{
+    "type": "object",
+    "properties": {
+        "architecture": { "type": "string" },
+        "os_type": { "type": "string" },
+        "os_version": { "type": "string" },
+        "hostname": { "type": "string" },
+        "cpu_cores": { "type": "integer" },
+        "memory_total": { "type": "integer" },
+        "memory_available": { "type": "integer" },
+        "swap_total": { "type": "integer" },
+        "swap_free": { "type": "integer" },
+        "cpu_usage": { "type": "number" },
+        "storage_devices": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "device": { "type": "string" },
+                    "mount_point": { "type": "string" },
+                    "filesystem": { "type": "string" },
+                    "total_bytes": { "type": "integer" },
+                    "available_bytes": { "type": "integer" },
+                    "percent_used": { "type": "number" }
+                }
+            }
+        }
+    }
+}'''
+display = '''
+{
+    "type": "dialog",
+    "sections": [
+        {
+            "title": "System",
+            "type": "key_value",
+            "items": [
+                { "key": "Architecture", "value": "architecture" },
+                { "key": "OS", "value": "os_type" },
+                { "key": "Version", "value": "os_version" },
+                { "key": "Hostname", "value": "hostname" }
+            ]
+        },
+        {
+            "title": "CPU & Memory",
+            "type": "key_value",
+            "items": [
+                { "key": "CPU Cores", "value": "cpu_cores" },
+                { "key": "CPU Usage", "value": "cpu_usage", "format": "percent" },
+                { "key": "Memory Total", "value": "memory_total", "format": "bytes" },
+                { "key": "Memory Available", "value": "memory_available", "format": "bytes" },
+                { "key": "Swap Total", "value": "swap_total", "format": "bytes" },
+                { "key": "Swap Free", "value": "swap_free", "format": "bytes" }
+            ]
+        },
+        {
+            "title": "Storage",
+            "type": "table",
+            "source": "storage_devices",
+            "style": "dense",
+            "columns": [
+                { "title": "Device", "value": "device", "width": 15 },
+                { "title": "Mount", "value": "mount_point", "width": 20 },
+                { "title": "Filesystem", "value": "filesystem", "width": 10 },
+                { "title": "Total", "value": "total_bytes", "width": 10, "align": "right", "format": "bytes" },
+                { "title": "Available", "value": "available_bytes", "width": 10, "align": "right", "format": "bytes" },
+                { "title": "Used", "value": "percent_used", "width": 8, "align": "right", "format": "percent" }
+            ]
+        }
+    ]
+}'''

@@ -1,0 +1,15 @@
+[package]
+name = "blue-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+blue-core = { workspace = true }
+blue-render-core = { workspace = true }
+blue-render-cli = { workspace = true }
+clap = { version = "4.5", features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+libloading = "0.8"
+ansi_term = "0.12"

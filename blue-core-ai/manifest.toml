@@ -1,0 +1,48 @@
+[module]
+name = "core-ai"
+version = "1.0.0"
+namespace = "blue"
+description = "Core AI functionality powered by Claude"
+
+[[methods]]
+path = ["ask"]
+description = "Send a prompt to Claude AI"
+args_schema = '''
+{
+  "type": "object",
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "description": "The prompt to send to Claude"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Path to a file to include as context"
+      }
+    },
+    "stream": {
+      "type": "boolean",
+      "description": "Whether to stream the response in real-time",
+      "default": false
+    }
+  },
+  "required": ["prompt"]
+}
+'''
+returns_schema = '''
+{
+  "type": "object",
+  "properties": {
+    "response": {
+      "type": "string",
+      "description": "Claude's response"
+    }
+  }
+}
+'''
+display = """{ 
+  "type": "stream",
+  "fallback": { "type": "raw" }
+}"""

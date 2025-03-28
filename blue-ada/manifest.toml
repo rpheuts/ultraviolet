@@ -1,0 +1,81 @@
+[module]
+name = "ada"
+version = "1.0.0"
+namespace = "aws"
+description = "Manage AWS credentials using ada"
+
+[[methods]]
+path = ["ada"]
+description = "Start ada credentials manager for an AWS account"
+args_schema = '''
+{
+  "type": "object",
+  "properties": {
+    "account": {
+      "type": "string",
+      "description": "AWS account number"
+    },
+    "provider": {
+      "type": "string",
+      "description": "Identity provider (default: conduit)",
+      "default": "conduit"
+    },
+    "role": {
+      "type": "string",
+      "description": "Role to assume (default: IibsAdminAccess-DO-NOT-DELETE)",
+      "default": "IibsAdminAccess-DO-NOT-DELETE"
+    }
+  },
+  "required": ["account"]
+}
+'''
+display = '''{ "type": "json" }'''
+
+[[methods]]
+path = ["status"]
+description = "Check if ada is managing credentials for any accounts"
+display = '''
+{
+  "type": "table",
+  "source": "processes",
+  "columns": [
+    {"value": "account", "title": "Account"},
+    {"value": "started_at", "title": "Started"},
+    {"value": "pid", "title": "PID"}
+  ]
+}
+'''
+
+[[methods]]
+path = ["provision"]
+description = "Install admin role for ADA and Blue CLI use"
+args_schema = '''
+{
+  "type": "object",
+  "properties": {
+    "account": {
+      "type": "string",
+      "description": "AWS account number"
+    }
+  },
+  "required": ["account"]
+}
+'''
+display = '''{ "type": "json" }'''
+
+[[methods]]
+path = ["creds"]
+description = "Get Blue Admin credentials for an AWS burner account"
+args_schema = '''
+{
+  "type": "object",
+  "properties": {
+    "account": {
+      "type": "string",
+      "description": "AWS account number"
+    }
+  },
+  "required": ["account"]
+}
+'''
+display = '''{ "type": "json" }'''
