@@ -1,5 +1,0 @@
-[module]
-name = "core-download"
-version = "0.1.0"
-namespace = "blue"
-description = "Core download functionality"

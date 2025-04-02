@@ -4,7 +4,7 @@ build:
 	cargo build --release
 
 install: build
-	@scripts/install.sh
+	@scripts/install-uv.sh
 
 test:
 	cargo test --all
@@ -15,4 +15,4 @@ lint:
 
 clean:
 	cargo clean
-	rm -rf ~/.blue
+	rm -rf ~/.uv

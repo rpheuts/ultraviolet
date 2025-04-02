@@ -80,6 +80,37 @@ Example refraction in a spectrum:
 }
 ```
 
+## External Composition
+
+Prisms can be composed into pipelines using external composition:
+
+```json
+{
+  "name": "api-data-processor",
+  "pipeline": [
+    {
+      "prism": "db:query",
+      "frequency": "query",
+      "args": { "query": "SELECT url FROM api_configs" }
+    },
+    {
+      "prism": "aws:curl",
+      "frequency": "curl.get",
+      "mapping": {
+        "input.url": "previous.output.url"
+      }
+    },
+    {
+      "prism": "transform:extract",
+      "frequency": "json",
+      "mapping": {
+        "input.data": "previous.output.body"
+      }
+    }
+  ]
+}
+```
+
 ## CLI Integration
 
 The photon system enables powerful CLI composition through Unix-style pipes:
