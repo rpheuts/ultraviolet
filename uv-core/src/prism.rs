@@ -3,22 +3,28 @@
 //! The UVPrism trait defines the interface for all prisms in the system.
 //! It uses a handler-based approach where the prism implements handlers for specific pulse types.
 
-use async_trait::async_trait;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::pulse::UVPulse;
 use crate::error::Result;
 use crate::link::UVLink;
 use crate::spectrum::UVSpectrum;
+use crate::multiplexer::PrismMultiplexer;
 
 /// Core trait for all prisms in the system.
-#[async_trait]
 pub trait UVPrism: Send + Sync {
     /// Initialize the prism with its spectrum.
     ///
     /// This method is called when the prism is first loaded, before any links are established.
     /// It should initialize the prism with its spectrum and perform any necessary setup.
-    async fn init(&mut self, spectrum: UVSpectrum) -> Result<()>;
+    fn init_spectrum(&mut self, spectrum: UVSpectrum) -> Result<()>;
+
+    /// Initialize the prism with a reference to the multiplexer.
+    ///
+    /// This method is called to provide the prism with access to the multiplexer
+    /// for operations like refraction that require accessing other prisms.
+    fn init_multiplexer(&mut self, multiplexer: Arc<PrismMultiplexer>) -> Result<()>;
     
     /// Get the prism's spectrum.
     ///
@@ -31,7 +37,7 @@ pub trait UVPrism: Send + Sync {
     /// This is a setup hook, not for processing. It should perform any setup that needs
     /// to happen when a link is established, such as registering callbacks or initializing
     /// state that depends on the link.
-    async fn link_established(&mut self, _link: &UVLink) -> Result<()> {
+    fn link_established(&mut self, _link: &UVLink) -> Result<()> {
         // Default implementation does nothing
         Ok(())
     }
@@ -42,13 +48,13 @@ pub trait UVPrism: Send + Sync {
     /// and return true if the pulse was handled, or false if it should be ignored.
     ///
     /// The default implementation handles nothing and returns false.
-    async fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool>;
+    fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool>;
     
     /// Called when the prism is about to be terminated.
     ///
     /// This is a cleanup hook, not for processing. It should perform any cleanup that needs
     /// to happen when the prism is shutting down, such as releasing resources or saving state.
-    async fn shutdown(&self) -> Result<()> {
+    fn shutdown(&self) -> Result<()> {
         // Default implementation does nothing
         Ok(())
     }

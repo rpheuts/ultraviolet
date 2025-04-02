@@ -6,15 +6,15 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::thread;
 use uuid::Uuid;
 use serde_json::Value;
-use tokio::spawn;
 use libloading::{Library, Symbol};
 
 use crate::error::{UVError, Result};
 use crate::link::UVLink;
 use crate::prism::UVPrism;
-use crate::prism_core::PrismCore;
+use crate::prism_core::UVPrismCore;
 use crate::refraction::{Refraction, PropertyMapper};
 use crate::spectrum::UVSpectrum;
 
@@ -70,9 +70,9 @@ impl PrismMultiplexer {
     }
     
     /// Load a spectrum for a prism.
-    pub async fn load_spectrum(&self, prism_id: &str) -> Result<Arc<UVSpectrum>> {        
+    pub fn load_spectrum(&self, prism_id: &str) -> Result<Arc<UVSpectrum>> {        
         // Load the spectrum
-        let spectrum = UVSpectrum::new(prism_id).await?;
+        let spectrum = UVSpectrum::new(prism_id)?;
         let spectrum_arc = Arc::new(spectrum);
         
         Ok(spectrum_arc)
@@ -198,28 +198,64 @@ impl PrismMultiplexer {
     }
     
     /// Connect to a prism and get a link for communication.
-    pub async fn establish_link(&self, prism_id: &str) -> Result<UVLink> {
-        // Create a new prism instance
-        let mut prism = self.load_prism(prism_id)?;
-        
-        // Load the spectrum for the prism
-        let spectrum = self.load_spectrum(prism_id).await?;
-        
-        // Initialize the prism with its spectrum
-        prism.init((*spectrum).clone()).await?;
-        
+    pub fn establish_link(&self, prism_id: &str) -> Result<UVLink> {
         // Create a pair of connected links
         let (system_link, prism_link) = UVLink::create_link();
         
-        // Create a PrismCore to manage the prism
-        let mut core = PrismCore::new(prism, Arc::new(self.clone()));
+        // Clone everything needed for the new thread
+        let prism_id = prism_id.to_string();
+        let multiplexer = self.clone();
         
-        // Establish the link with the core
-        core.establish_link(prism_link).await?;
-        
-        // Spawn a task to run the core's attenuate method
-        spawn(async move {
-            core.attenuate().await;
+        // Spawn a thread to run the prism
+        thread::spawn(move || {
+            // Create a new prism instance
+            let mut prism = match multiplexer.load_prism(&prism_id) {
+                Ok(p) => p,
+                Err(e) => {
+                    // Report initialization error
+                    let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                    return;
+                }
+            };
+            
+            // Load the spectrum for the prism
+            let spectrum = match multiplexer.load_spectrum(&prism_id) {
+                Ok(s) => s,
+                Err(e) => {
+                    // Report initialization error
+                    let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                    return;
+                }
+            };
+            
+            // Initialize the prism with its spectrum
+            if let Err(e) = prism.init_spectrum((*spectrum).clone()) {
+                // Report initialization error
+                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                return;
+            }
+            
+            // Initialize the prism with access to the multiplexer
+            if let Err(e) = prism.init_multiplexer(Arc::new(multiplexer)) {
+                // Report initialization error
+                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                return;
+            }
+            
+            // Establish the link with the prism
+            if let Err(e) = prism.link_established(&prism_link) {
+                // Report initialization error
+                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                return;
+            }
+            
+            // Create a PrismCore to manage the prism
+            let core = UVPrismCore::new(prism);
+            
+            // Run the prism's main loop
+            if let Err(e) = core.run_loop(prism_link) {
+                eprintln!("Error in prism thread: {}", e);
+            }
         });
         
         // Return the system link for communication with the prism
@@ -227,7 +263,7 @@ impl PrismMultiplexer {
     }
     
     /// Call a refraction on a target prism.
-    pub async fn refract(&self, refraction: &Refraction, payload: Value) -> Result<UVLink> {
+    pub fn refract(&self, refraction: &Refraction, payload: Value) -> Result<UVLink> {
         // Parse the target into namespace and name
         let (namespace, name) = refraction.parse_target()?;
         let target_id = format!("{}:{}", namespace, name);
@@ -237,11 +273,11 @@ impl PrismMultiplexer {
         let mapped_payload = mapper.apply_transpose(&payload)?;
         
         // Connect to the target prism
-        let link = self.establish_link(&target_id).await?;
+        let link = self.establish_link(&target_id)?;
         
         // Send the wavefront to the target
         let request_id = Uuid::new_v4();
-        link.send_wavefront(request_id, &refraction.frequency, mapped_payload).await?;
+        link.send_wavefront(request_id, &refraction.frequency, mapped_payload)?;
         
         // Return the link for receiving responses
         Ok(link)

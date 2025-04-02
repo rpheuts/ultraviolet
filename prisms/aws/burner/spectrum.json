@@ -1,0 +1,87 @@
+{
+  "name": "burner",
+  "namespace": "aws",
+  "version": "0.1.0",
+  "description": "Manage burner AWS accounts",
+  "wavelengths": [
+    {
+      "frequency": "list",
+      "description": "List all burner accounts",
+      "input": {},
+      "output": {
+        "accounts": [
+          {
+            "accountName": "string",
+            "awsAccountId": "string",
+            "status": "string",
+            "validTill": "string",
+            "user": "string"
+          }
+        ]
+      }
+    },
+    {
+      "frequency": "create",
+      "description": "Create a new burner account",
+      "input": {
+        "name": "string"
+      },
+      "output": {
+        "success": "boolean",
+        "message": "string",
+        "details": "object"
+      }
+    },
+    {
+      "frequency": "delete",
+      "description": "Delete a burner account",
+      "input": {
+        "name": "string"
+      },
+      "output": {
+        "success": "boolean",
+        "message": "string"
+      }
+    },
+    {
+      "frequency": "url",
+      "description": "Get AWS console login URL for a burner account",
+      "input": {
+        "account_id": "string"
+      },
+      "output": {
+        "url": "string"
+      }
+    }
+  ],
+  "refractions": [
+    {
+      "name": "curl.get",
+      "target": "aws:curl",
+      "frequency": "get",
+      "transpose": {
+        "url": "url",
+        "headers": "headers"
+      },
+      "reflection": {
+        "status": "status",
+        "body": "body"
+      }
+    },
+    {
+      "name": "curl.post",
+      "target": "aws:curl",
+      "frequency": "post",
+      "transpose": {
+        "target.url": "url",
+        "target.body": "body",
+        "target.method": "method",
+        "target.headers": "headers"
+      },
+      "reflection": {
+        "status": "status",
+        "body": "body"
+      }
+    }
+  ]
+}

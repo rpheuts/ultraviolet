@@ -5,11 +5,11 @@
 
 pub mod spectrum;
 
-use async_trait::async_trait;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use uv_core::{
-    UVPrism, UVPulse, UVSpectrum, UVLink, Result,
+    Result, UVLink, UVPrism, PrismMultiplexer, UVPulse, UVSpectrum
 };
 
 /// Echo prism that reflects back any input it receives.
@@ -24,10 +24,14 @@ impl EchoPrism {
     }
 }
 
-#[async_trait]
 impl UVPrism for EchoPrism {
-    async fn init(&mut self, spectrum: UVSpectrum) -> Result<()> {
+    fn init_spectrum(&mut self, spectrum: UVSpectrum) -> Result<()> {
         self.spectrum = Some(spectrum);
+        Ok(())
+    }
+    
+    fn init_multiplexer(&mut self, _multiplexer: Arc<PrismMultiplexer>) -> Result<()> {
+        // Echo prism doesn't need the multiplexer
         Ok(())
     }
     
@@ -35,7 +39,7 @@ impl UVPrism for EchoPrism {
         self.spectrum.as_ref().expect("Prism not initialized")
     }
     
-    async fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {
+    fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {
         if let UVPulse::Wavefront(wavefront) = pulse {
             if wavefront.frequency == "echo" {
                 // Deserialize the input
@@ -50,7 +54,7 @@ impl UVPrism for EchoPrism {
                 };
                 
                 // Send the response
-                link.reflect(id, output).await?;
+                link.reflect(id, output)?;
                 return Ok(true);
             }
         }
@@ -61,7 +65,7 @@ impl UVPrism for EchoPrism {
 
 // Export a function to create a new instance
 // This will be used by the dynamic loading system
-#[unsafe(no_mangle)]
+#[no_mangle]
 pub fn create_prism() -> Box<dyn UVPrism> {
     Box::new(EchoPrism::new())
 }

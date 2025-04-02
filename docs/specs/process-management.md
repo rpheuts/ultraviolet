@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Process Management System enables Ultraviolet to run and manage long-running processes without requiring a daemon. This document describes the architecture and implementation details of this system, which can be integrated with the prism-based architecture.
+The Process Management System enables Ultraviolet to run and manage long-running processes without requiring a daemon. This document describes the architecture and implementation details of this system, which is integrated with the thread-based prism architecture.
 
 ## Core Concepts
 
@@ -123,7 +123,7 @@ The Module Runner (`blue-module-runner`) provides a lightweight execution enviro
 6. Store PID and start time in state file
 
 ```rust
-pub async fn spawn(&mut self) -> Result<()> {
+pub fn spawn(&mut self) -> Result<()> {
     // Create output directory
     std::fs::create_dir_all(&self.info.config.output_dir)?;
 
@@ -184,7 +184,7 @@ pub async fn spawn(&mut self) -> Result<()> {
 3. Maintain exit codes and termination times
 
 ```rust
-pub async fn is_running(&self) -> Result<bool> {
+pub fn is_running(&self) -> Result<bool> {
     if let Some(pid) = self.info.pid {
         let raw_pid = Pid::from_raw(pid as i32);
         match signal::kill(raw_pid, None) {
@@ -205,7 +205,7 @@ pub async fn is_running(&self) -> Result<bool> {
 3. Update state file with exit code and time
 
 ```rust
-pub async fn terminate(&mut self) -> Result<()> {
+pub fn terminate(&mut self) -> Result<()> {
     if let Some(pid) = self.info.pid {
         let raw_pid = Pid::from_raw(pid as i32);
         
@@ -257,10 +257,10 @@ pub async fn terminate(&mut self) -> Result<()> {
 2. Clean up log files if requested
 
 ```rust
-pub async fn remove(&mut self) -> Result<()> {
+pub fn remove(&mut self) -> Result<()> {
     // If process is running, stop it first
-    if self.is_running().await? {
-        self.terminate().await?;
+    if self.is_running()? {
+        self.terminate()?;
     }
 
     // Remove state, exit, and lock files
@@ -331,7 +331,7 @@ pub fn load_state(state_file: impl AsRef<Path>) -> Result<Self> {
 
 ### Output Management
 
-Process output is captured and managed:
+Process output is captured and managed using synchronous file operations:
 
 1. **Output Files**:
    - `~/.blue/processes/logs/{uuid}/stdout.log`
@@ -346,19 +346,18 @@ Process output is captured and managed:
    - Configurable retention policy
 
 ```rust
-pub async fn read_lines(&self, stream: Stream, lines: usize) -> Result<Vec<String>> {
+pub fn read_lines(&self, stream: Stream, lines: usize) -> Result<Vec<String>> {
     let path = self.output_dir.join(stream.filename());
     if !path.exists() {
         return Ok(Vec::new());
     }
 
-    let file = File::open(&path).await?;
-    let reader = BufReader::new(file);
+    let file = std::fs::File::open(&path)?;
+    let reader = std::io::BufReader::new(file);
     let mut lines_vec = Vec::new();
-    let mut lines_iter = reader.lines();
-
-    while let Some(line) = lines_iter.next_line().await? {
-        lines_vec.push(line);
+    
+    for line in reader.lines() {
+        lines_vec.push(line?);
     }
 
     // Keep only the last N lines
@@ -369,18 +368,17 @@ pub async fn read_lines(&self, stream: Stream, lines: usize) -> Result<Vec<Strin
     Ok(lines_vec)
 }
 
-pub async fn follow(&self, stream: Stream, writer: &mut dyn Write) -> Result<()> {
+pub fn follow(&self, stream: Stream, writer: &mut dyn Write) -> Result<()> {
     let path = self.output_dir.join(stream.filename());
     if !path.exists() {
         return Ok(());
     }
 
-    let file = File::open(&path).await?;
-    let reader = BufReader::new(file);
-    let mut lines = reader.lines();
-
-    while let Some(line) = lines.next_line().await? {
-        writeln!(writer, "{}", line)?;
+    let file = std::fs::File::open(&path)?;
+    let reader = std::io::BufReader::new(file);
+    
+    for line in reader.lines() {
+        writeln!(writer, "{}", line?)?;
         writer.flush()?;
     }
 
@@ -388,9 +386,9 @@ pub async fn follow(&self, stream: Stream, writer: &mut dyn Write) -> Result<()>
 }
 ```
 
-## Integration with Prism Architecture
+## Integration with Thread-Based Prism Architecture
 
-The process management system can be integrated with the prism architecture:
+The process management system integrates with the thread-based prism architecture:
 
 ### Process Prism
 
@@ -402,14 +400,22 @@ struct ProcessPrism {
     processes: HashMap<String, Process>,
 }
 
-#[async_trait]
 impl UVPrism for ProcessPrism {
-    async fn init(&mut self, spectrum: UVSpectrum) -> Result<()> {
+    fn init_spectrum(&mut self, spectrum: UVSpectrum) -> Result<()> {
         self.core = PrismCore::new(spectrum, Arc::clone(&GLOBAL_MULTIPLEXER));
         Ok(())
     }
     
-    async fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {
+    fn init_multiplexer(&mut self, multiplexer: Arc<PrismMultiplexer>) -> Result<()> {
+        self.core.set_multiplexer(multiplexer);
+        Ok(())
+    }
+    
+    fn spectrum(&self) -> &UVSpectrum {
+        self.core.spectrum()
+    }
+    
+    fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {
         match pulse {
             UVPulse::Wavefront(wavefront) => {
                 match wavefront.frequency.as_str() {
@@ -419,14 +425,14 @@ impl UVPrism for ProcessPrism {
                         
                         // Create and spawn process
                         let mut process = Process::new(config)?;
-                        process.spawn().await?;
+                        process.spawn()?;
                         
                         // Store process
                         self.processes.insert(process.id().to_string(), process);
                         
                         // Return process ID
-                        link.emit_photon(id, json!({ "id": process.id() })).await?;
-                        link.emit_trap(id, None).await?;
+                        link.emit_photon(id, json!({ "id": process.id() }))?;
+                        link.emit_trap(id, None)?;
                         
                         Ok(true)
                     },
@@ -438,10 +444,10 @@ impl UVPrism for ProcessPrism {
                         
                         // Find and stop process
                         if let Some(mut process) = self.processes.get_mut(process_id) {
-                            process.terminate().await?;
-                            link.emit_photon(id, json!({ "success": true })).await?;
+                            process.terminate()?;
+                            link.emit_photon(id, json!({ "success": true }))?;
                         } else {
-                            link.emit_trap(id, Some(UVError::NotFound("Process not found".into()))).await?;
+                            link.emit_trap(id, Some(UVError::NotFound("Process not found".into())))?;
                         }
                         
                         Ok(true)
@@ -453,8 +459,8 @@ impl UVPrism for ProcessPrism {
             UVPulse::Extinguish => {
                 // Terminate all processes on shutdown
                 for (_, mut process) in self.processes.iter_mut() {
-                    if process.is_running().await? {
-                        let _ = process.terminate().await;
+                    if process.is_running()? {
+                        let _ = process.terminate();
                     }
                 }
                 Ok(true)
@@ -467,48 +473,72 @@ impl UVPrism for ProcessPrism {
 
 ### Process Output Streaming
 
-Process output can be streamed using photon sequences:
+Process output can be streamed using a dedicated thread:
 
 ```rust
-async fn stream_output(&self, process_id: &str, link: &UVLink, request_id: Uuid) -> Result<()> {
+fn stream_output(&self, process_id: &str, link: &UVLink, request_id: Uuid) -> Result<()> {
     if let Some(process) = self.processes.get(process_id) {
-        let reader = OutputReader::new(&process.config().output_dir);
+        let output_dir = process.config().output_dir.clone();
+        let link = link.clone(); // Links should implement Clone for sharing across threads
+        let request_id = request_id;
         
-        // Create a task to stream output
-        tokio::spawn(async move {
-            let mut stdout_file = File::open(reader.output_path(Stream::Stdout)).await?;
+        // Spawn a dedicated thread for output streaming
+        std::thread::spawn(move || {
+            let mut stdout_file = match std::fs::File::open(output_dir.join("stdout.log")) {
+                Ok(file) => file,
+                Err(e) => {
+                    let _ = link.emit_trap(
+                        request_id, 
+                        Some(UVError::IoError(format!("Failed to open stdout file: {}", e)))
+                    );
+                    return;
+                }
+            };
+                
             let mut buf = [0; 4096];
             
             loop {
-                match stdout_file.read(&mut buf).await {
+                match stdout_file.read(&mut buf) {
                     Ok(0) => {
                         // End of file, wait and try again
-                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        std::thread::sleep(Duration::from_millis(100));
                     },
                     Ok(n) => {
                         // Send data as photon
                         let data = String::from_utf8_lossy(&buf[0..n]).to_string();
-                        link.emit_photon(request_id, json!({ "data": data })).await?;
+                        if let Err(e) = link.emit_photon(request_id, json!({ "data": data })) {
+                            let _ = link.emit_trap(request_id, Some(UVError::IoError(format!("Failed to emit photon: {}", e))));
+                            break;
+                        }
                     },
                     Err(e) => {
                         // Send error and break
-                        link.emit_trap(request_id, Some(UVError::IoError(e.to_string()))).await?;
+                        let _ = link.emit_trap(request_id, Some(UVError::IoError(format!("Failed to read stdout: {}", e))));
                         break;
                     }
                 }
                 
                 // Check if process is still running
-                if !process.is_running().await? {
+                let process_running = match process_running_check(pid) {
+                    Ok(running) => running,
+                    Err(_) => false,
+                };
+                
+                if !process_running {
+                    // Process has terminated, send final event
+                    let exit_code = match read_exit_code_file(&exit_file) {
+                        Ok(code) => code,
+                        Err(_) => 0,
+                    };
+                    
                     // Send final exit code
-                    link.emit_photon(request_id, json!({ 
-                        "exit_code": process.exit_code() 
-                    })).await?;
-                    link.emit_trap(request_id, None).await?;
+                    let _ = link.emit_photon(request_id, json!({ 
+                        "exit_code": exit_code 
+                    }));
+                    let _ = link.emit_trap(request_id, None);
                     break;
                 }
             }
-            
-            Ok::<(), UVError>(())
         });
     }
     
@@ -524,126 +554,107 @@ The process management capabilities can be described in a spectrum:
 {
   "name": "process",
   "version": "1.0.0",
-  "frequencies": [
+  "wavelengths": [
     {
-      "name": "start",
+      "frequency": "start",
       "description": "Start a new process",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "command": { "type": "string" },
-          "args": { "type": "array", "items": { "type": "string" } },
-          "env": { "type": "object" },
-          "working_dir": { "type": "string" }
+      "input": {
+        "command": "string",
+        "args": ["string"],
+        "env": {
+          "additionalProperties": "string"
         },
-        "required": ["command"]
+        "working_dir": "string"
       },
-      "output_schema": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" }
-        }
+      "output": {
+        "id": "string"
       }
     },
     {
-      "name": "stop",
+      "frequency": "stop",
       "description": "Stop a running process",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "force": { "type": "boolean" }
-        },
-        "required": ["id"]
+      "input": {
+        "id": "string",
+        "force": "boolean"
       },
-      "output_schema": {
-        "type": "object",
-        "properties": {
-          "success": { "type": "boolean" }
-        }
+      "output": {
+        "success": "boolean"
       }
     },
     {
-      "name": "list",
+      "frequency": "list",
       "description": "List processes",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "string", "enum": ["all", "running", "exited"] },
-          "filter": { "type": "string" }
-        }
+      "input": {
+        "status": "string",
+        "filter": "string"
       },
-      "output_schema": {
-        "type": "object",
-        "properties": {
-          "processes": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": { "type": "string" },
-                "pid": { "type": "number" },
-                "status": { "type": "string" },
-                "command": { "type": "string" },
-                "started_at": { "type": "string" },
-                "exit_code": { "type": "number" }
-              }
-            }
+      "output": {
+        "processes": [
+          {
+            "id": "string",
+            "pid": "number",
+            "status": "string",
+            "command": "string",
+            "started_at": "string",
+            "exit_code": "number"
           }
-        }
+        ]
       }
     },
     {
-      "name": "logs",
+      "frequency": "logs",
       "description": "Get process logs",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "stream": { "type": "string", "enum": ["stdout", "stderr", "both"] },
-          "lines": { "type": "number" }
-        },
-        "required": ["id"]
+      "input": {
+        "id": "string",
+        "stream": "string",
+        "lines": "number"
       },
-      "output_schema": {
-        "type": "object",
-        "properties": {
-          "stdout": { "type": "array", "items": { "type": "string" } },
-          "stderr": { "type": "array", "items": { "type": "string" } }
-        }
+      "output": {
+        "stdout": ["string"],
+        "stderr": ["string"]
       }
     },
     {
-      "name": "follow",
+      "frequency": "follow",
       "description": "Follow process output in real-time",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "stream": { "type": "string", "enum": ["stdout", "stderr", "both"] }
-        },
-        "required": ["id"]
+      "input": {
+        "id": "string",
+        "stream": "string"
       },
-      "output_schema": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "data": { "type": "string" },
-            "stream": { "type": "string" },
-            "exit_code": { "type": "number" }
-          }
+      "output": [
+        {
+          "data": "string",
+          "stream": "string",
+          "exit_code": "number"
         }
-      },
-      "streaming": true
+      ]
     }
   ]
 }
 ```
 
+## Thread Safety Considerations
+
+The process management system is designed to be thread-safe:
+
+1. **State Management**:
+   - File system operations use proper locking to prevent race conditions
+   - Process state modifications are synchronized through mutexes
+   - State file updates are atomic where possible
+
+2. **Process Operations**:
+   - Process start/stop operations are atomic and thread-safe
+   - PID tracking handles race conditions for terminated processes
+   - Signal handling is safe across threads
+
+3. **Output Streaming**:
+   - Each output stream runs in its own dedicated thread
+   - Thread handles are stored to prevent early termination
+   - File operations use proper locking to prevent conflicts
+
 ## Conclusion
 
-The process management system provides a robust foundation for running and managing long-running processes without requiring a daemon. By integrating this system with the prism architecture, Ultraviolet can offer powerful process management capabilities while maintaining the composability and flexibility of the prism model.
+The process management system provides a robust foundation for running and managing long-running processes without requiring a daemon. By integrating this system with the thread-based prism architecture, Ultraviolet can offer powerful process management capabilities while maintaining the composability and flexibility of the prism model.
 
 Key benefits of this approach include:
 
@@ -652,3 +663,4 @@ Key benefits of this approach include:
 3. **Observability**: Comprehensive logging and status tracking
 4. **Composability**: Integration with the prism architecture
 5. **Efficiency**: Minimal overhead for process management
+6. **Thread Safety**: Safe operation in a thread-based architecture

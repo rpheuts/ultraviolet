@@ -1,9 +1,10 @@
 //! Pulse protocol types for the Ultraviolet system.
 //!
-//! The pulse protocol consists of three fundamental components:
+//! The pulse protocol consists of four fundamental components:
 //! - Wavefront: Initial request with frequency and input data
 //! - Photon: Response data carrier
 //! - Trap: Completion signal with optional error information
+//! - Extinguish: Signal to terminate a prism and its refractions
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

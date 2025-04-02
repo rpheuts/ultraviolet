@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use tokio::fs;
+use std::fs;
 
 use crate::{refraction::Refraction, UVError};
 
@@ -77,7 +77,7 @@ impl UVSpectrum {
         self.refractions.iter().find(|r| r.name == name)
     }
 
-    pub async fn new(prism_id: &str) -> Result<UVSpectrum, UVError> {
+    pub fn new(prism_id: &str) -> Result<UVSpectrum, UVError> {
         // Parse the prism ID to get namespace and name
         let parts: Vec<&str> = prism_id.split(':').collect();
         if parts.len() != 2 {
@@ -96,7 +96,7 @@ impl UVSpectrum {
                 .join("spectrum.json");
             
             if standard_path.exists() {
-                return Self::try_load_from_path(&standard_path).await;
+                return Self::try_load_from_path(&standard_path);
             }
         }
         
@@ -112,10 +112,9 @@ impl UVSpectrum {
     }
     
     /// Try to load a spectrum from a specific path.
-    async fn try_load_from_path(path: &Path) -> Result<UVSpectrum, UVError> {
+    fn try_load_from_path(path: &Path) -> Result<UVSpectrum, UVError> {
         // Read and parse the spectrum file
         let content = fs::read_to_string(path)
-            .await
             .map_err(|e| UVError::Other(format!("Failed to read spectrum file {}: {}", path.display(), e)))?;
             
         let spectrum: UVSpectrum = serde_json::from_str(&content)?;

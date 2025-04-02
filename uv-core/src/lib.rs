@@ -22,7 +22,7 @@ pub use refraction::{Refraction, PropertyMapper};
 pub use transport::{Transport, create_transport_pair};
 pub use link::UVLink;
 pub use prism::UVPrism;
-pub use prism_core::PrismCore;
+pub use prism_core::UVPrismCore;
 pub use multiplexer::PrismMultiplexer;
 
 // Version information

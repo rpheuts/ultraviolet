@@ -71,7 +71,7 @@ Ultraviolet follows a layered architecture to support progressive enhancement:
 ## 4. Evolution Roadmap
 
 ### Phase 1: Foundation (Current Work)
-- Async execution framework
+- Thread-based execution framework
 - Local prism loading and execution
 - Basic CLI interface
 - JSON-based pulse protocol
@@ -152,11 +152,10 @@ Create a transport-agnostic layer that works across:
 - Message queue systems (for scaling)
 
 ```rust
-#[async_trait]
 trait Transport: Send + Sync {
-    async fn send(&self, pulse: UVPulse) -> Result<()>;
-    async fn receive(&self) -> Result<Option<UVPulse>>;
-    async fn close(&self) -> Result<()>;
+    fn send(&self, pulse: UVPulse) -> Result<()>;
+    fn receive(&self) -> Result<Option<UVPulse>>;
+    fn close(&self) -> Result<()>;
 }
 
 // Implementations
@@ -167,12 +166,19 @@ struct WebSocketTransport { /* ... */ }
 
 ### 5.3 Prism Execution Models
 
-Support different execution models based on use case:
+Ultraviolet uses a thread-per-prism execution model where each prism runs in its own dedicated OS thread:
 
-1. **Same-task**: Simplest model, direct execution (current implementation)
-2. **Task-per-prism**: Each prism runs in its own tokio task
-3. **Process-per-prism**: Isolation through separate processes
-4. **Remote-prism**: Execution on remote node
+1. **One Thread Per Prism**: Each prism operates in its own thread for complete isolation
+2. **Thread-Safe Communication**: Communication happens through thread-safe channels
+3. **Synchronous Processing**: Prisms run a synchronous event loop to process pulses
+4. **Blocking I/O**: Standard blocking I/O operations are used for simplicity
+5. **Remote-prism**: Future capability for execution on remote nodes
+
+This model was chosen for:
+- **Simplicity**: Clean isolation without runtime context issues
+- **Independence**: Prisms operate independently with their own resources
+- **Reliability**: Failures in one prism don't affect others
+- **Clarity**: Thread boundaries naturally align with logical prism boundaries
 
 ### 5.4 Link Interface
 
@@ -180,8 +186,8 @@ The Link provides a bidirectional communication channel between system component
 
 ```rust
 pub struct UVLink {
-    transport: Arc<dyn UVTransport>,
-    // Internal channels, etc.
+    sender: crossbeam_channel::Sender<UVPulse>,
+    receiver: crossbeam_channel::Receiver<UVPulse>,
 }
 
 impl UVLink {
@@ -189,19 +195,19 @@ impl UVLink {
     pub fn create_pair() -> (UVLink, UVLink);
     
     // Receiving methods
-    pub async fn receive(&self) -> Result<Option<(Uuid, UVPulse)>>;
+    pub fn receive(&self) -> Result<Option<(Uuid, UVPulse)>>;
     
     // Sending methods
-    pub async fn send_wavefront(&self, id: Uuid, frequency: &str, input: Value) -> Result<()>;
-    pub async fn emit_photon(&self, id: Uuid, data: Value) -> Result<()>;
-    pub async fn emit_trap(&self, id: Uuid, error: Option<UVError>) -> Result<()>;
-    pub async fn send_pulse(&self, pulse: UVPulse) -> Result<()>; // For Extinguish and other special pulses
+    pub fn send_wavefront(&self, id: Uuid, frequency: &str, input: Value) -> Result<()>;
+    pub fn emit_photon(&self, id: Uuid, data: Value) -> Result<()>;
+    pub fn emit_trap(&self, id: Uuid, error: Option<UVError>) -> Result<()>;
+    pub fn send_pulse(&self, pulse: UVPulse) -> Result<()>; // For Extinguish and other special pulses
 }
 ```
 
 This interface enables:
-- Self-contained prisms that manage their own processing
-- Bidirectional communication through a single channel
+- Thread-safe communication across prism boundaries
+- Bidirectional messaging through a single channel pair
 - Support for various transport mechanisms
 - Correlation between requests and responses via request IDs
 - Schema-driven data flow based on spectrum definitions
@@ -215,40 +221,45 @@ struct EchoPrism {
     core: PrismCore,
 }
 
-#[async_trait]
 impl UVPrism for EchoPrism {
-    async fn init(&mut self, spectrum: UVSpectrum) -> Result<()> {
+    fn init_spectrum(&mut self, spectrum: UVSpectrum) -> Result<()> {
         // Create a PrismCore with the spectrum and a reference to the multiplexer
         self.core = PrismCore::new(spectrum, Arc::clone(&GLOBAL_MULTIPLEXER));
         Ok(())
     }
     
-    async fn on_link_established(&mut self, link: &UVLink) -> Result<()> {
-        // Any setup that needs to happen when the link is established
-        log::info!("Echo prism link established");
+    fn init_multiplexer(&mut self, multiplexer: Arc<PrismMultiplexer>) -> Result<()> {
+        // Store the multiplexer reference
+        self.core.set_multiplexer(multiplexer);
         Ok(())
     }
     
-    async fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {
+    fn spectrum(&self) -> &UVSpectrum {
+        self.core.spectrum()
+    }
+    
+    fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {
         match pulse {
             UVPulse::Wavefront(wavefront) => {
                 match wavefront.frequency.as_str() {
                     "echo" => {
                         // Simply reflect the input back
-                        link.reflect(id, wavefront.input.clone()).await?;
+                        link.emit_photon(id, wavefront.input.clone())?;
+                        link.emit_trap(id, None)?;
                         Ok(true) // Pulse handled
                     },
                     "echo_stream" => {
                         // For array outputs, we can send multiple photons
                         if let Value::Array(items) = &wavefront.input {
                             for item in items {
-                                link.emit_photon(id, item.clone()).await?;
+                                link.emit_photon(id, item.clone())?;
                             }
                             // Signal successful completion
-                            link.emit_trap(id, None).await?;
+                            link.emit_trap(id, None)?;
                         } else {
                             // Just echo back the single input
-                            link.reflect(id, wavefront.input.clone()).await?;
+                            link.emit_photon(id, wavefront.input.clone())?;
+                            link.emit_trap(id, None)?;
                         }
                         Ok(true) // Pulse handled
                     },
@@ -256,7 +267,7 @@ impl UVPrism for EchoPrism {
                         // Unknown frequency
                         link.emit_trap(id, Some(UVError::MethodNotFound(
                             wavefront.frequency.clone()
-                        ))).await?;
+                        )))?;
                         Ok(true) // Pulse handled
                     }
                 }
@@ -272,21 +283,14 @@ impl UVPrism for EchoPrism {
             }
         }
     }
-    
-    async fn on_shutdown(&self) -> Result<()> {
-        // Any cleanup that needs to happen when the prism is shutting down
-        log::info!("Echo prism shutdown complete");
-        Ok(())
-    }
 }
 ```
 
 This implementation demonstrates:
 1. A handler-based prism that focuses on business logic
 2. Infrastructure concerns handled by PrismCore
-3. Lifecycle hooks for setup and cleanup
-4. Selective handling of pulse types
-5. Clean error handling through the Result type
+3. Synchronous handling of pulse types
+4. Clean error handling through the Result type
 
 ### 5.6 Refraction System
 
@@ -301,17 +305,17 @@ pub struct PrismCore {
 
 impl PrismCore {
     // Call a refraction and get a link for responses
-    pub async fn refract(&self, name: &str, payload: Value) -> Result<UVLink> {
+    pub fn refract(&self, name: &str, payload: Value) -> Result<UVLink> {
         // 1. Look up the refraction in the spectrum
         let refraction = self.spectrum.find_refraction(name)
             .ok_or_else(|| UVError::RefractionError(format!("Refraction not found: {}", name)))?;
         
         // 2. Use the multiplexer to handle the refraction
-        self.multiplexer.refract(refraction, payload).await
+        self.multiplexer.refract(refraction, payload)
     }
     
     // Process responses from a refraction with reflection mapping
-    pub async fn process_refraction_responses(
+    pub fn process_refraction_responses(
         &self, 
         refraction_link: &UVLink, 
         refraction: &Refraction,
@@ -319,18 +323,18 @@ impl PrismCore {
         output_id: Uuid
     ) -> Result<()> {
         // Process responses until we get a trap
-        while let Some((id, pulse)) = refraction_link.receive().await? {
+        while let Some((id, pulse)) = refraction_link.receive()? {
             match pulse {
                 UVPulse::Photon(photon) => {
                     // Apply reflection mapping to the data
                     let mapped_data = self.multiplexer.apply_mapping(&refraction.reflection, photon.data)?;
                     
                     // Forward the mapped data to the output link
-                    output_link.emit_photon(output_id, mapped_data).await?;
+                    output_link.emit_photon(output_id, mapped_data)?;
                 },
                 UVPulse::Trap(trap) => {
                     // Forward any error to the output link
-                    output_link.emit_trap(output_id, trap.error).await?;
+                    output_link.emit_trap(output_id, trap.error)?;
                     break;
                 },
                 _ => continue, // Ignore other pulse types
@@ -341,18 +345,18 @@ impl PrismCore {
     }
     
     // Convenience method to refract and absorb the result
-    pub async fn refract_and_absorb<T>(&self, name: &str, payload: Value) -> Result<T>
+    pub fn refract_and_absorb<T>(&self, name: &str, payload: Value) -> Result<T>
     where
         T: for<'de> Deserialize<'de>
     {
-        let link = self.refract(name, payload).await?;
-        link.absorb::<T>().await
+        let link = self.refract(name, payload)?;
+        link.absorb::<T>()
     }
     
     // Extinguish all refractions
-    pub async fn extinguish_refractions(&self) -> Result<()> {
+    pub fn extinguish_refractions(&self) -> Result<()> {
         for (_, refracted) in &self.refraction_cache {
-            refracted.link.send_pulse(UVPulse::Extinguish).await?;
+            refracted.link.send_pulse(UVPulse::Extinguish)?;
         }
         Ok(())
     }
@@ -367,25 +371,51 @@ pub struct PrismMultiplexer {
 
 impl PrismMultiplexer {
     // Connect to a prism and get a link for communication
-    pub async fn connect_to_prism(&self, prism_id: &str) -> Result<UVLink> {
-        // Load the prism
-        let prism = self.load_prism(prism_id).await?;
-        
+    pub fn establish_link(&self, prism_id: &str) -> Result<UVLink> {
         // Create a pair of connected links
-        let (system_link, prism_link) = UVLink::create_pair(&*self.transport_factory);
+        let (system_link, prism_link) = UVLink::create_pair();
         
-        // Load the spectrum for the prism
-        let spectrum = self.load_spectrum(prism_id).await?;
+        // Clone necessary resources for the new thread
+        let prism_id = prism_id.to_string();
+        let multiplexer = self.clone();
         
-        // Create a PrismCore to manage the prism
-        let mut core = PrismCore::new(prism, spectrum, Arc::clone(self));
-        
-        // Establish the link with the core
-        core.establish_link(prism_link).await?;
-        
-        // Spawn a task to run the core's attenuate method
-        tokio::spawn(async move {
-            core.attenuate().await;
+        // Spawn a dedicated thread for this prism
+        std::thread::spawn(move || {
+            // Create and initialize the prism
+            let mut prism = match multiplexer.load_prism(&prism_id) {
+                Ok(p) => p,
+                Err(e) => {
+                    // Report initialization error through the link
+                    let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                    return;
+                }
+            };
+            
+            // Load the spectrum for the prism
+            let spectrum = match multiplexer.load_spectrum(&prism_id) {
+                Ok(s) => s,
+                Err(e) => {
+                    let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                    return;
+                }
+            };
+            
+            // Initialize the prism
+            if let Err(e) = prism.init_spectrum(spectrum) {
+                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                return;
+            }
+            
+            if let Err(e) = prism.init_multiplexer(Arc::new(multiplexer)) {
+                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                return;
+            }
+            
+            // Create a PrismCore to manage the prism
+            let core = UVPrismCore::new(prism);
+            
+            // Run the main loop
+            let _ = core.run_loop(prism_link);
         });
         
         // Return the system link for communication with the prism
@@ -393,20 +423,21 @@ impl PrismMultiplexer {
     }
     
     // Call a refraction on a target prism
-    pub async fn refract(&self, refraction: &Refraction, payload: Value) -> Result<UVLink> {
+    pub fn refract(&self, refraction: &Refraction, payload: Value) -> Result<UVLink> {
         // Parse the target into namespace and name
-        let (namespace, prism_name) = refraction.parse_target()?;
-        let target_id = format!("{}:{}", namespace, prism_name);
+        let (namespace, name) = refraction.parse_target()?;
+        let target_id = format!("{}:{}", namespace, name);
         
         // Apply transpose mapping to the payload
-        let mapped_payload = self.apply_mapping(&refraction.transpose, payload)?;
+        let mapper = PropertyMapper::new(refraction.transpose.clone());
+        let mapped_payload = mapper.apply_transpose(&payload)?;
         
-        // Connect to the target prism
-        let link = self.connect_to_prism(&target_id).await?;
+        // Connect to the target prism (creates a new thread)
+        let link = self.establish_link(&target_id)?;
         
         // Send the wavefront to the target
         let request_id = Uuid::new_v4();
-        link.send_wavefront(request_id, &refraction.frequency, mapped_payload).await?;
+        link.send_wavefront(request_id, &refraction.frequency, mapped_payload)?;
         
         // Return the link for receiving responses
         Ok(link)
@@ -437,46 +468,38 @@ Key benefits of the refraction system:
 3. **Property Mapping**: Data flow between prisms is explicit and transparent
 4. **Self-Contained**: Prisms remain self-contained while leveraging other prisms
 5. **Error Handling**: Consistent error propagation through trap photons
+6. **Thread Isolation**: Each refraction runs in its own dedicated thread
 
 ## 6. Immediate Implementation Plan
 
 For the immediate implementation (focusing on Phase 1-2):
 
-1. **Enhance Pulse Protocol**:
-   - Add correlation IDs to track request-response pairs
-   - Support partial responses for streaming
-   - Structured error types
+1. **Implement Thread-Based Architecture**:
+   - One thread per prism for clean isolation
+   - Replace async/await with synchronous code
+   - Use thread-safe channels for communication
+   - Standard blocking I/O operations
 
 2. **Update Prism Interface**:
    ```rust
-   #[async_trait]
    trait UVPrism: Send + Sync {
        /// Initialize the prism with its spectrum
-       async fn init(&mut self, spectrum: UVSpectrum) -> Result<()>;
+       fn init_spectrum(&mut self, spectrum: UVSpectrum) -> Result<()>;
        
-       /// Called when a link is established with the prism
-       /// This is a setup hook, not for processing
-       async fn on_link_established(&mut self, link: &UVLink) -> Result<()> {
-           // Default implementation does nothing
-           Ok(())
-       }
+       /// Initialize the prism with access to the multiplexer
+       fn init_multiplexer(&mut self, multiplexer: Arc<PrismMultiplexer>) -> Result<()>;
+       
+       /// Get the spectrum for the prism
+       fn spectrum(&self) -> &UVSpectrum;
        
        /// Handle any pulse received on the link
        /// Returns true if the pulse was handled, false if it should be ignored
-       async fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool>;
-       
-       /// Called when the prism is about to be terminated
-       /// This is a cleanup hook, not for processing
-       async fn on_shutdown(&self) -> Result<()> {
-           // Default implementation does nothing
-           Ok(())
-       }
+       fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool>;
    }
    ```
    
    This handler-based approach ensures prisms:
    - Focus on business logic, with infrastructure concerns handled by PrismCore
-   - Have clear lifecycle hooks for setup and cleanup
    - Can selectively handle specific pulse types
    - Can be extended with new pulse types without changing the trait
    - Have consistent error handling through the Result type
@@ -491,8 +514,7 @@ For the immediate implementation (focusing on Phase 1-2):
    - Support lazy loading of target prisms
 
 4. **Refine Process Stream**:
-   - Keep main loop on primary thread for simplicity
-   - Use separate task only for output handling
+   - Use dedicated threads for output handling
    - Add proper error propagation
    - Pass correlation IDs
 
@@ -545,4 +567,6 @@ Key features of the process management system:
 
 7. **Lazy Loading**: Resources should only be loaded when actually needed to improve performance.
 
-8. **Clear Data Flow**: Property mapping should make data flow between components explicit and transparent.
+8. **Thread Isolation**: Each prism runs in its own dedicated thread for clean isolation and stability.
+
+9. **Clear Data Flow**: Property mapping should make data flow between components explicit and transparent.

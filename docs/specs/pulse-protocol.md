@@ -30,6 +30,9 @@ enum UVPulse {
         id: Uuid,       // Matches the wavefront id
         error: Option<UVError>,  // None means successful completion
     },
+    
+    // Termination signal
+    Extinguish,  // No parameters needed - signals prism to shut down
 }
 ```
 
@@ -49,6 +52,12 @@ The response data carrier. It contains:
 The pulse terminator that signals completion. It contains:
 - A correlation ID matching the wavefront
 - An optional error (None indicates successful completion)
+
+#### Extinguish
+The termination signal that instructs a prism to shut down. It contains:
+- No parameters - it's a simple signal
+- When received, causes the prism to clean up resources and exit its thread
+- Should be propagated to any child prisms or refractions
 
 ### Refractions
 
@@ -77,6 +86,116 @@ Example refraction in a spectrum:
   "reflection": {
     "refraction.body": "reflection.body"
   }
+}
+```
+
+## Thread-Based Implementation
+
+The pulse protocol is implemented using thread-safe channels:
+
+```rust
+pub struct UVLink {
+    sender: crossbeam_channel::Sender<UVPulse>,
+    receiver: crossbeam_channel::Receiver<UVPulse>,
+}
+
+impl UVLink {
+    // Create a pair of connected links
+    pub fn create_pair() -> (UVLink, UVLink) {
+        let (tx1, rx1) = crossbeam_channel::unbounded();
+        let (tx2, rx2) = crossbeam_channel::unbounded();
+        
+        (
+            UVLink { sender: tx1, receiver: rx2 },
+            UVLink { sender: tx2, receiver: rx1 },
+        )
+    }
+    
+    // Send a wavefront pulse
+    pub fn send_wavefront(&self, id: Uuid, frequency: &str, input: Value) -> Result<()> {
+        self.sender.send(UVPulse::Wavefront {
+            id,
+            frequency: frequency.to_string(), 
+            input
+        })?;
+        Ok(())
+    }
+    
+    // Receive the next pulse
+    pub fn receive(&self) -> Result<Option<(Uuid, UVPulse)>> {
+        match self.receiver.recv_timeout(Duration::from_millis(100)) {
+            Ok(pulse) => {
+                // For Extinguish, use a dummy UUID since it doesn't have an ID
+                let id = match &pulse {
+                    UVPulse::Extinguish => Uuid::nil(),
+                    _ => pulse.id(),
+                };
+                Ok(Some((id, pulse)))
+            },
+            Err(crossbeam_channel::RecvTimeoutError::Timeout) => Ok(None),
+            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                Err(UVError::ConnectionClosed)
+            }
+        }
+    }
+    
+    // Send an extinguish signal
+    pub fn send_extinguish(&self) -> Result<()> {
+        self.sender.send(UVPulse::Extinguish)?;
+        Ok(())
+    }
+    
+    // Emit a photon pulse
+    pub fn emit_photon(&self, id: Uuid, data: Value) -> Result<()> {
+        self.sender.send(UVPulse::Photon { id, data })?;
+        Ok(())
+    }
+    
+    // Emit a trap pulse
+    pub fn emit_trap(&self, id: Uuid, error: Option<UVError>) -> Result<()> {
+        self.sender.send(UVPulse::Trap { id, error })?;
+        Ok(())
+    }
+    
+    // Absorb all responses and return the final result
+    pub fn absorb<T>(&self) -> Result<T>
+    where
+        T: for<'de> serde::de::DeserializeOwned,
+    {
+        // Generate a random ID for the correlation
+        let request_id = Uuid::new_v4();
+        
+        // Collect all photons
+        let mut data = None;
+        
+        // Process responses until we get a trap
+        loop {
+            match self.receive()? {
+                Some((id, UVPulse::Photon(photon))) if id == request_id => {
+                    data = Some(photon.data);
+                },
+                Some((id, UVPulse::Trap(trap))) if id == request_id => {
+                    if let Some(error) = trap.error {
+                        return Err(error);
+                    }
+                    break;
+                },
+                Some(_) => continue, // Ignore other messages
+                None => {
+                    // No message received, continue polling
+                    std::thread::sleep(Duration::from_millis(10));
+                },
+            }
+        }
+        
+        // Deserialize the final data
+        if let Some(data) = data {
+            return serde_json::from_value(data)
+                .map_err(|e| UVError::DeserializationError(format!("{}", e)));
+        }
+        
+        Err(UVError::Other("No data received".into()))
+    }
 }
 ```
 
@@ -159,6 +278,8 @@ The mapping syntax supports:
 5. **Clear Data Flow**: Property mapping makes data flow between prisms explicit and transparent
 6. **Error Handling**: Trap photons provide a consistent error handling mechanism
 7. **CLI Integration**: Natural Unix-style composition with pipes
+8. **Thread Safety**: Communication via thread-safe channels ensures reliable inter-thread messaging
+9. **Isolated Execution**: Each prism runs in its own thread for clean isolation and stability
 
 ## Implementation Notes
 
@@ -185,8 +306,8 @@ pub struct RefractionResolver {
 }
 
 impl RefractionResolver {
-    pub async fn resolve_refraction(&self, prism: &str, refraction: &str) -> Result<UVLink>;
-    pub async fn load_target_if_needed(&self, target: &str) -> Result<()>;
+    pub fn resolve_refraction(&self, prism: &str, refraction: &str) -> Result<UVLink>;
+    pub fn load_target_if_needed(&self, target: &str) -> Result<()>;
 }
 ```
 
@@ -204,6 +325,46 @@ impl PropertyMapper {
 }
 ```
 
+## Thread-Based Prism Execution
+
+Each prism runs in its own dedicated thread with a simple event loop:
+
+```rust
+pub fn run_prism_loop(prism: Box<dyn UVPrism>, link: UVLink) -> Result<()> {
+    // Run until we get an Extinguish pulse or the link disconnects
+    loop {
+        match link.receive() {
+            Ok(Some((id, pulse))) => {
+                match pulse {
+                    UVPulse::Extinguish => {
+                        // Clean shutdown
+                        break;
+                    },
+                    _ => {
+                        // Handle the pulse
+                        if let Err(e) = prism.handle_pulse(id, &pulse, &link) {
+                            // Report error
+                            let _ = link.emit_trap(id, Some(e));
+                        }
+                    }
+                }
+            },
+            Ok(None) => {
+                // No message received, continue polling
+                continue;
+            },
+            Err(e) => {
+                // Connection closed or other error
+                log::error!("Prism link error: {}", e);
+                break;
+            }
+        }
+    }
+    
+    Ok(())
+}
+```
+
 ## Future Extensions
 
 1. **Advanced Property Mapping**: Support for transformations, conditionals, and functions
@@ -211,31 +372,32 @@ impl PropertyMapper {
 3. **Validation Rules**: Schema validation for refraction inputs and outputs
 4. **Streaming Refractions**: Optimize for streaming data between prisms
 5. **Bidirectional Refractions**: Support two-way communication between prisms
+6. **Thread Pooling**: For systems with many prisms, support thread pooling to limit resource usage
 
 ## Example: Using Refractions
 
 ```rust
 impl BurnerPrism {
-    async fn handle_list(&self, request_id: Uuid, input: &Value) -> Result<()> {
+    fn handle_list(&self, request_id: Uuid, input: &Value, link: &UVLink) -> Result<()> {
         // Call the http.get refraction
-        let link = self.refract("http.get", json!({
+        let http_link = self.refract("http.get", json!({
             "url": "https://api.aws.com/accounts"
-        })).await?;
+        }))?;
         
         // Process responses
-        while let Some((id, pulse)) = link.receive().await? {
+        while let Some((id, pulse)) = http_link.receive()? {
             match pulse {
                 UVPulse::Photon(photon) => {
                     // Process the data
                     let accounts = parse_accounts(photon.data)?;
                     
                     // Emit our own response
-                    self.link.emit_photon(request_id, json!(accounts)).await?;
+                    link.emit_photon(request_id, json!(accounts))?;
                 },
                 UVPulse::Trap(trap) => {
                     if let Some(err) = trap.error {
                         // Handle error or propagate
-                        self.link.emit_trap(request_id, Some(err)).await?;
+                        link.emit_trap(request_id, Some(err))?;
                         return Ok(());
                     }
                     // Successful completion
@@ -246,10 +408,10 @@ impl BurnerPrism {
         }
         
         // Signal successful completion
-        self.link.emit_trap(request_id, None).await?;
+        link.emit_trap(request_id, None)?;
         Ok(())
     }
 }
 ```
 
-This creates a powerful system where prisms can be self-contained while still leveraging functionality from other prisms through clearly defined dependencies.
+This creates a powerful system where prisms can be self-contained while still leveraging functionality from other prisms through clearly defined dependencies, all running in isolated threads for stability and clean execution.

@@ -4,6 +4,8 @@ members = [
     "uv-core",
     "uv-cli",
     "prisms/example/echo",
+    "prisms/aws/curl",
+    "prisms/aws/burner",
 ]
 
 [workspace.dependencies]
