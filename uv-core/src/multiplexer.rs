@@ -277,7 +277,7 @@ impl PrismMultiplexer {
         
         // Send the wavefront to the target
         let request_id = Uuid::new_v4();
-        link.send_wavefront(request_id, &refraction.frequency, mapped_payload)?;
+        link.send_wavefront(request_id, &target_id, &refraction.frequency, mapped_payload)?;
         
         // Return the link for receiving responses
         Ok(link)

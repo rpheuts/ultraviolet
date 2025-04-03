@@ -227,7 +227,8 @@
                 const message = {
                     "Wavefront": {
                         "id": uuid,
-                        "frequency": prismId.includes(':') ? `${prismId}:${frequency}` : frequency,
+                        "prism": prismId,
+                        "frequency": frequency,
                         "input": inputData
                     }
                 };

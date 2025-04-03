@@ -12,13 +12,13 @@ use uv_core::PrismMultiplexer;
 /// a particular message, and for managing connections to those prisms.
 pub struct PulseRouter {
     /// The multiplexer for establishing prism connections
-    multiplexer: Arc<PrismMultiplexer>,
+    _multiplexer: Arc<PrismMultiplexer>,
 }
 
 impl PulseRouter {
     /// Create a new PulseRouter with the given multiplexer.
     pub fn new(multiplexer: Arc<PrismMultiplexer>) -> Self {
-        Self { multiplexer }
+        Self { _multiplexer: multiplexer }
     }
     
     /// Parse a prism and frequency from a given string.

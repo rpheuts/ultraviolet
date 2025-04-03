@@ -219,13 +219,14 @@ Prisms can be composed into pipelines using external composition:
         "input.url": "previous.output.url"
       }
     },
-    {
-      "prism": "transform:extract",
-      "frequency": "json",
-      "mapping": {
-        "input.data": "previous.output.body"
-      }
-    }
+{
+  "Wavefront": {
+    "id": "f3174137-30a8-4e9f-aa20-10c17a6b0561",
+    "prism": "aws:burner",
+    "frequency": "list",
+    "input": {}
+  }
+}
   ]
 }
 ```

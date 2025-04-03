@@ -34,7 +34,10 @@ pub struct Wavefront {
     /// Unique identifier for correlation
     pub id: Uuid,
     
-    /// The frequency (method) to invoke
+    /// The prism to invoke (in namespace:name format)
+    pub prism: String,
+    
+    /// The frequency (method) to invoke on the prism
     pub frequency: String,
     
     /// Input data structured according to the frequency's input schema

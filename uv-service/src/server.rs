@@ -27,10 +27,10 @@ pub struct AppState {
     multiplexer: Arc<PrismMultiplexer>,
     
     /// The pulse router for handling message routing
-    router: Arc<PulseRouter>,
+    _router: Arc<PulseRouter>,
     
     /// Service configuration options
-    options: ServiceOptions,
+    _options: ServiceOptions,
 }
 
 /// Run the WebSocket server with the provided options.
@@ -49,8 +49,8 @@ pub async fn run_server(options: ServiceOptions) -> Result<()> {
     // Create shared state
     let state = AppState {
         multiplexer,
-        router,
-        options: options.clone(),
+        _router: router,
+        _options: options.clone(),
     };
     
     // Build the router
@@ -117,22 +117,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         // Process the pulse inline to avoid passing the sender around
                         match pulse {
                             UVPulse::Wavefront(wavefront) => {
-                                // Extract prism from wavefront (format is typically "namespace:name")
-                                let parts: Vec<&str> = wavefront.frequency.split(':').collect();
-                                let prism_id = if parts.len() > 1 {
-                                    // If frequency contains a colon, the format is "namespace:name:frequency"
-                                    format!("{}:{}", parts[0], parts[1])
-                                } else {
-                                    // Otherwise, assume it's in the format "prism_id:frequency" where frequency has no colons
-                                    // This is a fallback and probably should be handled more robustly
-                                    "example:echo".to_string()
-                                };
-                                
-                                let frequency = if parts.len() > 2 {
-                                    parts[2].to_string()
-                                } else {
-                                    wavefront.frequency.clone()
-                                };
+                                // Get prism and frequency from wavefront
+                                let prism_id = wavefront.prism.clone();
+                                let frequency = wavefront.frequency.clone();
                                 
                                 debug!("Routing to prism: {}, frequency: {}", prism_id, frequency);
                                 
@@ -143,7 +130,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                         session.links.push(link.clone());
                                         
                                         // Send the wavefront
-                                        if let Err(e) = link.send_wavefront(wavefront.id, &frequency, wavefront.input.clone()) {
+                                        if let Err(e) = link.send_wavefront(wavefront.id, &prism_id, &frequency, wavefront.input.clone()) {
                                             error!("Error sending wavefront: {}", e);
                                             
                                             // Create a trap for error
@@ -249,7 +236,7 @@ async fn process_responses(
     loop {
         // Get the next response from the prism
         match link.receive() {
-            Ok(Some((id, pulse))) => {
+            Ok(Some((_id, pulse))) => {
                 // Serialize the pulse
                 if let Ok(json) = serde_json::to_string(&pulse) {
                     // Forward to the WebSocket

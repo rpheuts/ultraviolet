@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Send the command
     let request_id = Uuid::new_v4();
-    if let Err(e) = link.send_wavefront(request_id, &cli.frequency, args_json) {
+    if let Err(e) = link.send_wavefront(request_id, &cli.prism, &cli.frequency, args_json) {
         eprintln!("Failed to send command: {}", e);
         return Err(Box::new(e));
     }

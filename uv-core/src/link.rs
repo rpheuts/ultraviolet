@@ -57,11 +57,12 @@ impl UVLink {
     
     /// Send a wavefront to initiate a request.
     ///
-    /// This function creates a wavefront with the given ID, frequency, and input data,
+    /// This function creates a wavefront with the given ID, prism, frequency, and input data,
     /// and sends it over the transport.
-    pub fn send_wavefront(&self, id: Uuid, frequency: &str, input: Value) -> Result<()> {
+    pub fn send_wavefront(&self, id: Uuid, prism: &str, frequency: &str, input: Value) -> Result<()> {
         let wavefront = Wavefront {
             id,
+            prism: prism.to_string(),
             frequency: frequency.to_string(),
             input,
         };
