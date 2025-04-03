@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "uv-core",
     "uv-cli",
+    "uv-service",
     "prisms/example/echo",
     "prisms/aws/curl",
     "prisms/aws/burner",

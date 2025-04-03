@@ -76,8 +76,7 @@ impl BurnerPrism {
         let response = self.refract(
             "curl.get",
             json!({
-                "url": "https://conduit.security.a2z.com/api/accounts/burner",
-                "headers": ""
+                "url": "https://conduit.security.a2z.com/api/accounts/burner"
             })
         )?;
         

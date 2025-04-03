@@ -59,18 +59,37 @@ impl PropertyMapper {
     /// Apply transpose mapping from source to target.
     ///
     /// This function maps properties from the source object to the target object
-    /// according to the mapping rules.
+    /// according to the mapping rules. Field names ending with '?' are considered
+    /// optional and will not cause errors if the source field is missing.
     pub fn apply_transpose(&self, source: &Value) -> Result<Value> {
         // Create a new empty object for the target
         let mut target = serde_json::Map::new();
         
         // Apply each mapping rule
         for (target_path, source_path) in &self.mapping_rules {
-            // Extract the value from the source using the source path
-            let source_value = self.extract_value(source, source_path)?;
+            // Check if the source path is optional (ends with '?')
+            let (actual_source_path, is_optional) = if source_path.ends_with('?') {
+                (&source_path[..source_path.len()-1], true)
+            } else {
+                (source_path.as_str(), false)
+            };
             
-            // Insert the value into the target using the target path
-            self.insert_value(&mut target, target_path, source_value)?;
+            // Try to extract the value, handling optional fields
+            match self.extract_value(source, actual_source_path) {
+                Ok(source_value) => {
+                    // Insert the value into the target using the target path
+                    self.insert_value(&mut target, target_path, source_value)?;
+                },
+                Err(e) => {
+                    // For optional fields, skip if not present
+                    if is_optional {
+                        continue;
+                    } else {
+                        // For required fields, propagate the error
+                        return Err(e);
+                    }
+                }
+            }
         }
         
         Ok(Value::Object(target))
@@ -80,17 +99,37 @@ impl PropertyMapper {
     ///
     /// This function maps properties from the source object to the target object
     /// according to the mapping rules, but with source and target paths swapped.
+    /// Field names ending with '?' are considered optional and will not cause errors 
+    /// if the source field is missing.
     pub fn apply_reflection(&self, source: &Value) -> Result<Value> {
         // Create a new empty object for the target
         let mut target = serde_json::Map::new();
         
         // Apply each mapping rule (with source and target paths swapped)
         for (source_path, target_path) in &self.mapping_rules {
-            // Extract the value from the source using the source path
-            let source_value = self.extract_value(source, source_path)?;
+            // Check if the source path is optional (ends with '?')
+            let (actual_source_path, is_optional) = if source_path.ends_with('?') {
+                (&source_path[..source_path.len()-1], true)
+            } else {
+                (source_path.as_str(), false)
+            };
             
-            // Insert the value into the target using the target path
-            self.insert_value(&mut target, target_path, source_value)?;
+            // Try to extract the value, handling optional fields
+            match self.extract_value(source, actual_source_path) {
+                Ok(source_value) => {
+                    // Insert the value into the target using the target path
+                    self.insert_value(&mut target, target_path, source_value)?;
+                },
+                Err(e) => {
+                    // For optional fields, skip if not present
+                    if is_optional {
+                        continue;
+                    } else {
+                        // For required fields, propagate the error
+                        return Err(e);
+                    }
+                }
+            }
         }
         
         Ok(Value::Object(target))

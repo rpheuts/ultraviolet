@@ -61,7 +61,7 @@
       "frequency": "get",
       "transpose": {
         "url": "url",
-        "headers": "headers"
+        "headers": "headers?"
       },
       "reflection": {
         "status": "status",
@@ -74,9 +74,9 @@
       "frequency": "post",
       "transpose": {
         "target.url": "url",
-        "target.body": "body",
-        "target.method": "method",
-        "target.headers": "headers"
+        "target.body": "body?",
+        "target.method": "method?",
+        "target.headers": "headers?"
       },
       "reflection": {
         "status": "status",
