@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::ServiceOptions;
+use crate::{ServiceOptions, LogLevel};
 
 /// Command-line arguments for the UV Service.
 #[derive(Parser, Debug)]
@@ -60,6 +60,8 @@ impl CliOptions {
             key_path: self.key,
             serve_static: self.static_dir.is_some(),
             static_dir: self.static_dir,
+            init_tracing: true,
+            log_level: LogLevel::Normal,
         })
     }
 }

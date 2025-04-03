@@ -33,6 +33,25 @@ pub enum ServiceError {
 /// Type alias for service results
 pub type Result<T> = std::result::Result<T, ServiceError>;
 
+/// Log level for the service
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LogLevel {
+    /// Show detailed debug logs
+    Debug,
+    
+    /// Show only warnings and errors (default)
+    Normal,
+    
+    /// Show only critical errors
+    Quiet,
+}
+
+impl Default for LogLevel {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
 /// Configuration options for the UV Service.
 #[derive(Debug, Clone)]
 pub struct ServiceOptions {
@@ -53,6 +72,13 @@ pub struct ServiceOptions {
     
     /// Path to static files directory (if serving static files)
     pub static_dir: Option<PathBuf>,
+    
+    /// Whether to initialize the tracing system
+    /// Set to false when used as an embedded service to avoid conflicts
+    pub init_tracing: bool,
+    
+    /// Log level setting
+    pub log_level: LogLevel,
 }
 
 impl Default for ServiceOptions {
@@ -64,6 +90,8 @@ impl Default for ServiceOptions {
             key_path: None,
             serve_static: false,
             static_dir: None,
+            init_tracing: true,
+            log_level: LogLevel::Normal,
         }
     }
 }

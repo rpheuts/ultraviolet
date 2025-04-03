@@ -1,153 +1,129 @@
-use serde_json::{json, Value};
-use uuid::Uuid;
-use clap::Parser;
+//! Ultraviolet Command Line Interface.
+//!
+//! This crate provides a command line interface for interacting with Ultraviolet prisms.
+//! It can either run in client mode, executing commands against prisms (local or remote),
+//! or in service mode, running a WebSocket server that clients can connect to.
+
 use std::io::stdout;
 
-use uv_core::PrismMultiplexer;
+use anyhow::Result;
+use clap::Parser;
+use tracing::{ error, debug };
+use uv_service::{start_service, ServiceOptions};
 use uv_ui::UIInferenceEngine;
 
+mod args;
 mod renderer;
+mod ws_client;
+
+use args::Cli;
 use renderer::CliRenderer;
+use ws_client::{execute_with_embedded, execute_remote};
 
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    /// Prism to execute in namespace:name format
-    prism: String,
-
-    /// Frequency to call (method)
-    #[arg(default_value = "help")]
-    frequency: String,
-
-    /// Arguments for the frequency
-    #[arg(trailing_var_arg = true)]
-    args: Vec<String>,
-
-    /// Output raw JSON instead of formatted UI
-    #[arg(long, default_value_t = false)]
-    raw: bool,
-
-    /// Disable colored output
-    #[arg(long, default_value_t = false)]
-    no_color: bool,
-
-    /// Show help for this prism
-    #[arg(long, default_value_t = false)]
-    help: bool,
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Parse command line arguments
     let cli = Cli::parse();
+
+    // Initialize tracing with filter based on debug/quiet flags
+    let filter = if cli.debug {
+        "uv_cli=debug,uv_service=debug"
+    } else if cli.quiet {
+        "uv_cli=error,uv_service=error"
+    } else {
+        "uv_cli=warn,uv_service=warn"
+    };
     
-    // Create a multiplexer
-    let multiplexer = PrismMultiplexer::new();
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .init();
     
-    if cli.help || cli.frequency == "help" {
-        // TODO: Load the spectrum and show available frequencies
-        println!("Help for prism: {}", cli.prism);
-        // This will be enhanced later with actual spectrum info
+    // Check if we're in service mode
+    if cli.service {
+        // Run as a WebSocket server
+        println!("Starting UV service on {}", cli.bind);
+        
+        // Create service options
+        let bind_address = cli.bind.parse()?;
+        let log_level = if cli.debug {
+            uv_service::LogLevel::Debug
+        } else if cli.quiet {
+            uv_service::LogLevel::Quiet
+        } else {
+            uv_service::LogLevel::Normal
+        };
+
+        let options = ServiceOptions {
+            bind_address,
+            enable_tls: cli.tls,
+            cert_path: cli.cert,
+            key_path: cli.key,
+            serve_static: cli.static_dir.is_some(),
+            static_dir: cli.static_dir,
+            init_tracing: true, // Always initialize tracing in standalone mode
+            log_level,
+        };
+        
+        // Run the server until terminated
+        start_service(options).await.map_err(|e| anyhow::anyhow!("Service error: {}", e))?;
+        
         return Ok(());
     }
     
-    // Connect to the specified prism
-    let link = match multiplexer.establish_link(&cli.prism) {
-        Ok(link) => link,
-        Err(e) => {
-            eprintln!("Failed to connect to prism {}: {}", cli.prism, e);
-            return Err(Box::new(e));
-        }
+    // We're in client mode
+    let prism = cli.prism.as_ref().expect("Prism is required when not in service mode");
+    let binding = "help".to_string();
+    let frequency = cli.frequency.as_ref().unwrap_or(&binding);
+    
+    debug!("Executing {} for prism {}", frequency, prism);
+    
+    // Execute the command
+    let result = if let Some(remote) = &cli.remote {
+        // Connect to a remote service
+        debug!("Using remote service at {}", remote);
+        execute_remote(remote, cli.secure, prism, frequency, &cli.args).await?
+    } else {
+        // Start embedded service and execute locally
+        debug!("Using embedded service");
+        execute_with_embedded(prism, frequency, &cli.args).await?
     };
     
-    // Process arguments into a JSON object
-    let args_json = process_args(&cli.args);
+    // Print the result
+    println!("Received {} from {}:{}", frequency, prism, frequency);
     
-    // Send the command
-    let request_id = Uuid::new_v4();
-    if let Err(e) = link.send_wavefront(request_id, &cli.prism, &cli.frequency, args_json) {
-        eprintln!("Failed to send command: {}", e);
-        return Err(Box::new(e));
-    }
-    
-    // Absorb the response as raw Value
-    match link.absorb::<Value>() {
-        Ok(response) => {
-            if cli.raw {
-                // Raw JSON output
-                match serde_json::to_string_pretty(&response) {
-                    Ok(json) => println!("{}", json),
-                    Err(e) => eprintln!("Error serializing response: {}", e),
-                }
-            } else {
-                // UI component rendering
-                let engine = UIInferenceEngine::new();
-                match engine.infer(&response) {
-                    Ok(component) => {
-                        // Create renderer with color setting
-                        let renderer = CliRenderer::new().with_color(!cli.no_color);
-                        if let Err(e) = renderer.render(&component, &mut stdout()) {
-                            eprintln!("Error rendering response: {}", e);
-                            
-                            // Fall back to JSON
-                            match serde_json::to_string_pretty(&response) {
-                                Ok(json) => println!("{}", json),
-                                Err(e) => eprintln!("Error serializing response: {}", e),
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        // Fall back to JSON on inference error
-                        eprintln!("UI inference failed, falling back to JSON: {}", e);
-                        match serde_json::to_string_pretty(&response) {
-                            Ok(json) => println!("{}", json),
-                            Err(e) => eprintln!("Error serializing response: {}", e),
-                        }
+    if cli.raw {
+        // Output raw JSON
+        match serde_json::to_string_pretty(&result) {
+            Ok(json) => println!("{}", json),
+            Err(e) => eprintln!("Error serializing result: {}", e),
+        }
+    } else {
+        // Use UI inference and rendering
+        let engine = UIInferenceEngine::new();
+        match engine.infer(&result) {
+            Ok(component) => {
+                // Create a renderer with color setting
+                let renderer = CliRenderer::new().with_color(!cli.no_color);
+                if let Err(e) = renderer.render(&component, &mut stdout()) {
+                    error!("Error rendering result: {}", e);
+                    
+                    // Fall back to JSON
+                    match serde_json::to_string_pretty(&result) {
+                        Ok(json) => println!("{}", json),
+                        Err(e) => eprintln!("Error serializing result: {}", e),
                     }
                 }
+            },
+            Err(e) => {
+                // Fall back to JSON on inference error
+                error!("UI inference failed, falling back to JSON: {}", e);
+                match serde_json::to_string_pretty(&result) {
+                    Ok(json) => println!("{}", json),
+                    Err(e) => eprintln!("Error serializing result: {}", e),
+                }
             }
-            
-            Ok(())
-        },
-        Err(e) => {
-            eprintln!("Error receiving response: {}", e);
-            Err(Box::new(e))
         }
     }
-}
-
-// Process arguments into a JSON object
-fn process_args(args: &[String]) -> Value {
-    let mut result = json!({});
     
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-        
-        if arg.starts_with("--") {
-            let key = &arg[2..];
-            
-            // Check for --key=value format
-            if let Some(eq_pos) = key.find('=') {
-                let (real_key, value) = key.split_at(eq_pos);
-                result[real_key] = json!(value[1..]);
-            } 
-            // Otherwise expect --key value format
-            else if i + 1 < args.len() {
-                result[key] = json!(args[i + 1]);
-                i += 1; // Skip next arg since we used it as value
-            } else {
-                // Treat as boolean flag if no value
-                result[key] = json!(true);
-            }
-        } else if i == 0 {
-            // Special case for the first positional argument (subcommand)
-            // We'll just ignore it as it's already captured as the frequency
-        } else {
-            // Add positional arguments with numeric keys
-            result[format!("arg{}", i)] = json!(arg);
-        }
-        
-        i += 1;
-    }
-    
-    result
+    Ok(())
 }

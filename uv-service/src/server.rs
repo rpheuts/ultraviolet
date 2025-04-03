@@ -18,7 +18,7 @@ use uuid::Uuid;
 use serde_json;
 use uv_core::{PrismMultiplexer, UVLink, UVPulse, Trap, UVError};
 
-use crate::{ServiceOptions, Result, ServiceError, router::PulseRouter};
+use crate::{ServiceOptions, Result, ServiceError, router::PulseRouter, LogLevel};
 
 /// Shared application state
 #[derive(Clone)]
@@ -35,10 +35,18 @@ pub struct AppState {
 
 /// Run the WebSocket server with the provided options.
 pub async fn run_server(options: ServiceOptions) -> Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_env_filter("uv_service=debug,tower_http=debug")
-        .init();
+    // Initialize tracing if requested, with appropriate log level
+    if options.init_tracing {
+        let filter = match options.log_level {
+            LogLevel::Debug => "uv_service=debug,tower_http=debug",
+            LogLevel::Normal => "uv_service=warn,tower_http=warn",
+            LogLevel::Quiet => "uv_service=error,tower_http=error",
+        };
+        
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .init();
+    }
     
     // Create the multiplexer
     let multiplexer = Arc::new(PrismMultiplexer::new());
