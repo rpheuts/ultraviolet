@@ -15,7 +15,8 @@
             "type": "string",
             "description": "Message to echo back"
           }
-        }
+        },
+        "required": ["message"]
       },
       "output": {
         "type": "object",
@@ -24,7 +25,8 @@
             "type": "string",
             "description": "Echoed message"
           }
-        }
+        },
+        "required": ["message"]
       }
     }
   ],

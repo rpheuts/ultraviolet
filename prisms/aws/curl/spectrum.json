@@ -8,30 +8,48 @@
       "frequency": "get",
       "description": "Make a GET request",
       "input": {
-        "url": "string",
-        "headers": {
-          "additionalProperties": "string"
-        }
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "headers": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          }
+        },
+        "required": ["url"]
       },
       "output": {
-        "status": "number",
-        "body": "string"
+        "type": "object",
+        "properties": {
+          "status": {"type": "number"},
+          "body": {"type": "string"}
+        },
+        "required": ["status", "body"]
       }
     },
     {
       "frequency": "post",
       "description": "Make a POST request",
       "input": {
-        "url": "string",
-        "body": "string",
-        "method": "string",
-        "headers": {
-          "additionalProperties": "string"
-        }
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "body": {"type": "string"},
+          "method": {"type": "string"},
+          "headers": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          }
+        },
+        "required": ["url"]
       },
       "output": {
-        "status": "number",
-        "body": "string"
+        "type": "object",
+        "properties": {
+          "status": {"type": "number"},
+          "body": {"type": "string"}
+        },
+        "required": ["status", "body"]
       }
     }
   ]

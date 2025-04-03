@@ -59,8 +59,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(Box::new(e));
     }
     
-    println!("Sent {} to {}:{}", cli.frequency, cli.prism, cli.frequency);
-    
     // Absorb the response as raw Value
     match link.absorb::<Value>() {
         Ok(response) => {

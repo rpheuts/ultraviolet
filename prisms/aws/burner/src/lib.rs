@@ -16,7 +16,7 @@ use uv_core::{
 
 use crate::spectrum::{
     Account, CreateInput, CreateOutput, DeleteInput, DeleteOutput,
-    HttpResponse, ListInput, ListOutput, TokenResponse, UrlInput, UrlOutput,
+    HttpResponse, ListInput, TokenResponse, UrlInput, UrlOutput,
 };
 
 /// Burner prism for managing AWS accounts
@@ -84,17 +84,15 @@ impl BurnerPrism {
         let accounts_data: Value = serde_json::from_str(&response.body)
             .map_err(|e| UVError::ExecutionError(format!("Failed to parse accounts response: {}", e)))?;
             
-        // Create and emit the response
+        // Create and emit each account as a separate photon
         if let Some(accounts) = accounts_data.get("accounts").and_then(|a| a.as_array()) {
             let account_list: Vec<Account> = serde_json::from_value(accounts.clone().into())
                 .map_err(|e| UVError::ExecutionError(format!("Failed to parse account list: {}", e)))?;
                 
-            let output = ListOutput { accounts: account_list };
-            link.emit_photon(id, serde_json::to_value(output)?)?;
-        } else {
-            // Handle case where accounts array is missing or malformed
-            let empty_output = ListOutput { accounts: vec![] };
-            link.emit_photon(id, serde_json::to_value(empty_output)?)?;
+            // Emit each account as a separate photon
+            for account in account_list {
+                link.emit_photon(id, serde_json::to_value(account)?)?;
+            }
         }
         
         // Signal successful completion

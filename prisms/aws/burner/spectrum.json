@@ -7,50 +7,79 @@
     {
       "frequency": "list",
       "description": "List all burner accounts",
-      "input": {},
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
       "output": {
-        "accounts": [
-          {
-            "accountName": "string",
-            "awsAccountId": "string",
-            "status": "string",
-            "validTill": "string",
-            "user": "string"
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "accountName": {"type": "string"},
+            "awsAccountId": {"type": "string"},
+            "status": {"type": "string"},
+            "validTill": {"type": "string"},
+            "user": {"type": "string"}
           }
-        ]
+        }
       }
     },
     {
       "frequency": "create",
       "description": "Create a new burner account",
       "input": {
-        "name": "string"
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"}
+        },
+        "required": ["name"]
       },
       "output": {
-        "success": "boolean",
-        "message": "string",
-        "details": "object"
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"},
+          "details": {"type": "object"}
+        },
+        "required": ["success", "message"]
       }
     },
     {
       "frequency": "delete",
       "description": "Delete a burner account",
       "input": {
-        "name": "string"
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"}
+        },
+        "required": ["name"]
       },
       "output": {
-        "success": "boolean",
-        "message": "string"
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"}
+        },
+        "required": ["success", "message"]
       }
     },
     {
       "frequency": "url",
       "description": "Get AWS console login URL for a burner account",
       "input": {
-        "account_id": "string"
+        "type": "object",
+        "properties": {
+          "account_id": {"type": "string"}
+        },
+        "required": ["account_id"]
       },
       "output": {
-        "url": "string"
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"}
+        },
+        "required": ["url"]
       }
     }
   ],
