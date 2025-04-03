@@ -1,8 +1,13 @@
 use serde_json::{json, Value};
 use uuid::Uuid;
 use clap::Parser;
+use std::io::stdout;
 
 use uv_core::PrismMultiplexer;
+use uv_ui::UIInferenceEngine;
+
+mod renderer;
+use renderer::CliRenderer;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -18,9 +23,13 @@ struct Cli {
     #[arg(trailing_var_arg = true)]
     args: Vec<String>,
 
-    /// Output raw JSON
+    /// Output raw JSON instead of formatted UI
     #[arg(long, default_value_t = false)]
     raw: bool,
+
+    /// Disable colored output
+    #[arg(long, default_value_t = false)]
+    no_color: bool,
 
     /// Show help for this prism
     #[arg(long, default_value_t = false)]
@@ -62,23 +71,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Absorb the response as raw Value
     match link.absorb::<Value>() {
         Ok(response) => {
-            // Print raw or formatted JSON
             if cli.raw {
-                match serde_json::to_string(&response) {
-                    Ok(json) => println!("{}", json),
-                    Err(e) => eprintln!("Error serializing response: {}", e),
-                }
-            } else {
+                // Raw JSON output
                 match serde_json::to_string_pretty(&response) {
                     Ok(json) => println!("{}", json),
                     Err(e) => eprintln!("Error serializing response: {}", e),
                 }
+            } else {
+                // UI component rendering
+                let engine = UIInferenceEngine::new();
+                match engine.infer(&response) {
+                    Ok(component) => {
+                        // Create renderer with color setting
+                        let renderer = CliRenderer::new().with_color(!cli.no_color);
+                        if let Err(e) = renderer.render(&component, &mut stdout()) {
+                            eprintln!("Error rendering response: {}", e);
+                            
+                            // Fall back to JSON
+                            match serde_json::to_string_pretty(&response) {
+                                Ok(json) => println!("{}", json),
+                                Err(e) => eprintln!("Error serializing response: {}", e),
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        // Fall back to JSON on inference error
+                        eprintln!("UI inference failed, falling back to JSON: {}", e);
+                        match serde_json::to_string_pretty(&response) {
+                            Ok(json) => println!("{}", json),
+                            Err(e) => eprintln!("Error serializing response: {}", e),
+                        }
+                    }
+                }
             }
+            
             Ok(())
         },
         Err(e) => {
             eprintln!("Error receiving response: {}", e);
-            Err(Box::new(e))                
+            Err(Box::new(e))
         }
     }
 }

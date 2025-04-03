@@ -4,6 +4,7 @@ members = [
     "uv-core",
     "uv-cli",
     "uv-service",
+    "uv-ui",
     "prisms/example/echo",
     "prisms/aws/curl",
     "prisms/aws/burner",
