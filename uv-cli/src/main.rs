@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
             key_path: cli.key,
             serve_static: cli.static_dir.is_some(),
             static_dir: cli.static_dir,
-            init_tracing: true, // Always initialize tracing in standalone mode
+            init_tracing: false, // Don't initialize tracing again (already done in CLI)
             log_level,
         };
         

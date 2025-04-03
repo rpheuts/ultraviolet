@@ -45,9 +45,6 @@ impl UVPrism for EchoPrism {
                 // Deserialize the input
                 let input: spectrum::EchoInput = serde_json::from_value(wavefront.input.clone())?;
                 
-                // Log the received input
-                println!("Echo prism received: {:?}", &input.message);
-                
                 // Create the output
                 let output = spectrum::EchoOutput {
                     message: input.message.clone(),
