@@ -25,13 +25,30 @@ impl CommandPrism {
     
     /// Handle parse frequency
     fn handle_parse(&self, id: Uuid, wavefront: &Wavefront, link: &UVLink) -> Result<bool> {
-        // Extract required parameters
-        let schema = match wavefront.input.get("schema") {
+        // Extract required parameters and parse schema if needed
+        let schema_value = match wavefront.input.get("schema") {
             Some(s) => s,
             None => {
                 link.emit_trap(id, Some(UVError::InvalidInput("Missing schema parameter".to_string())))?;
                 return Err(UVError::InvalidInput("Missing schema parameter".to_string()));
             }
+        };
+        
+        // Parse the schema if it's a string
+        let schema = if let Some(schema_str) = schema_value.as_str() {
+            // It's a string, we need to parse it
+            match serde_json::from_str::<serde_json::Value>(schema_str) {
+                Ok(parsed) => parsed,
+                Err(e) => {
+                    let error_msg = format!("Failed to parse schema JSON string: {}", e);
+                    println!("DEBUG: Error parsing schema: {}", error_msg);
+                    link.emit_trap(id, Some(UVError::InvalidInput(error_msg.clone())))?;
+                    return Err(UVError::InvalidInput(error_msg));
+                }
+            }
+        } else {
+            // It's already a JSON value, use it as-is
+            schema_value.clone()
         };
         
         let args = match wavefront.input.get("args") {
@@ -129,13 +146,30 @@ impl CommandPrism {
     
     /// Handle describe frequency
     fn handle_describe(&self, id: Uuid, wavefront: &Wavefront, link: &UVLink) -> Result<bool> {
-        // Extract required parameters
-        let schema = match wavefront.input.get("schema") {
+        // Extract required parameters and parse schema if needed
+        let schema_value = match wavefront.input.get("schema") {
             Some(s) => s,
             None => {
                 link.emit_trap(id, Some(UVError::InvalidInput("Missing schema parameter".to_string())))?;
                 return Err(UVError::InvalidInput("Missing schema parameter".to_string()));
             }
+        };
+        
+        // Parse the schema if it's a string
+        let schema = if let Some(schema_str) = schema_value.as_str() {
+            // It's a string, we need to parse it
+            match serde_json::from_str::<serde_json::Value>(schema_str) {
+                Ok(parsed) => parsed,
+                Err(e) => {
+                    let error_msg = format!("Failed to parse schema JSON string: {}", e);
+                    println!("DEBUG: Error parsing schema: {}", error_msg);
+                    link.emit_trap(id, Some(UVError::InvalidInput(error_msg.clone())))?;
+                    return Err(UVError::InvalidInput(error_msg));
+                }
+            }
+        } else {
+            // It's already a JSON value, use it as-is
+            schema_value.clone()
         };
         
         let command_name = wavefront.input.get("command_name")
@@ -178,12 +212,27 @@ impl CommandPrism {
         
         usage = format!("{} [options]", usage);
         
-        // Return help information
+        // Add debug logging
+        println!("DEBUG: Schema: {:?}", schema);
+        println!("DEBUG: Properties count: {}", schema.get("properties")
+            .and_then(|p| p.as_object())
+            .map_or(0, |p| p.len()));
+        println!("DEBUG: Options count: {}", options.len());
+        println!("DEBUG: Options: {:?}", options);
+        
+        // Return help information with simpler format for debugging
         let result = json!({
             "usage": usage,
             "description": description,
             "options": options,
+            "debug_info": {
+                "has_properties": schema.get("properties").is_some(),
+                "options_count": options.len()
+            }
         });
+        
+        // Print the result for debugging
+        println!("DEBUG: Result: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
         
         link.emit_photon(id, result)?;
         link.emit_trap(id, None)?;

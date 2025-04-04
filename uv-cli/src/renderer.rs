@@ -42,15 +42,24 @@ impl CliRenderer {
     /// Render a card component
     fn render_card(&self, card: &Card, writer: &mut impl Write) -> std::io::Result<()> {
         // Get the title from the card or infer one
-        let title = card.title.as_deref().or_else(|| card.infer_title()).unwrap_or("Card");
+        let title = card.title.as_deref().or_else(|| card.infer_title()).unwrap_or("");
         
         // Render the title
-        if self.colored {
-            writeln!(writer, "{}", title.green().bold())?;
-            writeln!(writer, "{}", "═".repeat(title.len()).green())?;
-        } else {
-            writeln!(writer, "{}", title)?;
-            writeln!(writer, "{}", "═".repeat(title.len()))?;
+        if title.len() > 0 {
+            if self.colored {
+                writeln!(writer, "{}", title.green().bold())?;
+                writeln!(writer, "{}", "═".repeat(title.len()).green())?;
+            } else {
+                writeln!(writer, "{}", title)?;
+                writeln!(writer, "{}", "═".repeat(title.len()))?;
+            }
+        }
+
+        // If there is only 1 item, just render it
+        if card.properties.len() == 1 {
+            self.render_property_value(&card.properties.values().last().unwrap(), writer)?;
+            writeln!(writer)?;
+            return Ok(());
         }
         
         // Render properties

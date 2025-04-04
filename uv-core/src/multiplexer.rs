@@ -4,7 +4,7 @@
 //! It provides a centralized way to handle prism lifecycle and communication.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use uuid::Uuid;
@@ -41,32 +41,14 @@ impl PrismFactory {
 pub struct PrismMultiplexer {
     /// Map of prism IDs to their factories
     factories: Arc<RwLock<HashMap<String, Arc<PrismFactory>>>>,
-    
-    /// Paths to search for prism libraries (deprecated)
-    library_paths: Arc<RwLock<Vec<PathBuf>>>,
 }
 
 impl PrismMultiplexer {
     /// Create a new PrismMultiplexer.
     pub fn new() -> Self {
         Self {
-            factories: Arc::new(RwLock::new(HashMap::new())),
-            library_paths: Arc::new(RwLock::new(Vec::new())),
+            factories: Arc::new(RwLock::new(HashMap::new()))
         }
-    }
-    
-    /// Add a directory to search for prism libraries.
-    /// This method is kept for backward compatibility but is deprecated.
-    pub fn add_library_path(&self, path: impl AsRef<Path>) {
-        let mut paths = self.library_paths.write().unwrap();
-        paths.push(path.as_ref().to_path_buf());
-    }
-    
-    /// Load prisms from all registered library paths.
-    /// This method is kept for backward compatibility but is deprecated.
-    pub fn load_prisms(&self) -> Result<()> {
-        // This method is now a no-op as prisms are loaded on demand
-        Ok(())
     }
     
     /// Load a spectrum for a prism.
@@ -140,56 +122,6 @@ impl PrismMultiplexer {
                 
                 // Create and return a new prism instance
                 return factory.create();
-            }
-        }
-        
-        // If we get here, we couldn't find the prism in the standard location
-        // Try the legacy method of looking in the library paths
-        let paths = self.library_paths.read().unwrap();
-        for path in paths.iter() {
-            if path.is_dir() {
-                for entry in std::fs::read_dir(path)? {
-                    let entry = entry?;
-                    let entry_path = entry.path();
-                    
-                    if entry_path.is_file() {
-                        let extension = entry_path.extension().and_then(|ext| ext.to_str());
-                        
-                        // Check if this is a dynamic library
-                        if let Some(ext) = extension {
-                            if ext == "so" || ext == "dylib" || ext == "dll" {
-                                let file_name = entry_path.file_stem()
-                                    .and_then(|s| s.to_str())
-                                    .ok_or_else(|| UVError::Other("Invalid library name".to_string()))?;
-                                
-                                if file_name == name || file_name == prism_id {
-                                    // Load the library
-                                    let lib = unsafe { Library::new(&entry_path) }?;
-                                    
-                                    // Verify that it has the create_prism symbol
-                                    unsafe {
-                                        // Just check that the symbol exists
-                                        let _: Symbol<CreatePrismFn> = lib.get(b"create_prism")?;
-                                    }
-                                    
-                                    let lib_arc = Arc::new(lib);
-                                    
-                                    // Create a prism factory
-                                    let factory = Arc::new(PrismFactory {
-                                        library: lib_arc,
-                                    });
-                                    
-                                    // Register the factory
-                                    let mut factories = self.factories.write().unwrap();
-                                    factories.insert(prism_id.to_string(), factory.clone());
-                                    
-                                    // Create and return a new prism instance
-                                    return factory.create();
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
         

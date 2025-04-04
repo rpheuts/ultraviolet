@@ -92,6 +92,26 @@ async fn main() -> Result<()> {
     
     debug!("Executing {} for prism {} with args: {:?}", frequency, prism, filtered_args);
     
+    // Set up direct debug logging if debug flag is set
+    if cli.debug {
+        println!("DEBUG ENABLED: About to execute command");
+    }
+    
+    // Get the raw schema if it starts with @
+    let mut filtered_args = filtered_args.clone(); 
+    for i in 0..filtered_args.len() {
+        if filtered_args[i].starts_with("--schema=@") {
+            if let Some(path) = filtered_args[i].strip_prefix("--schema=@") {
+                if let Ok(content) = std::fs::read_to_string(path) {
+                    filtered_args[i] = format!("--schema={}", content);
+                    if cli.debug {
+                        println!("DEBUG: Replaced file reference with content: {}", content);
+                    }
+                }
+            }
+        }
+    }
+    
     // Execute the command
     let result = if let Some(remote) = &cli.remote {
         // Connect to a remote service
@@ -103,8 +123,10 @@ async fn main() -> Result<()> {
         execute_with_embedded(prism, frequency, &filtered_args).await?
     };
     
-    // Print the result
-    println!("Received {} from {}:{}", frequency, prism, frequency);
+    // Debug logging
+    if cli.debug {
+        println!("DEBUG: Command result: {}", serde_json::to_string_pretty(&result).unwrap_or_default());
+    }
     
     if cli.raw {
         // Output raw JSON
