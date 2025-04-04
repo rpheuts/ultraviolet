@@ -8,6 +8,7 @@ members = [
     "prisms/example/echo",
     "prisms/aws/curl",
     "prisms/aws/burner",
+    "prisms/core/command",
 ]
 
 [workspace.dependencies]

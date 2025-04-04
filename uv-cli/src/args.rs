@@ -17,6 +17,7 @@ pub struct Cli {
     
     /// Arguments for the frequency
     #[arg(trailing_var_arg = true)]
+    #[arg(allow_hyphen_values = true)]  // Allow args that start with hyphens
     pub args: Vec<String>,
     
     /// Run in service mode (WebSocket server)

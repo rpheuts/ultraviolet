@@ -265,11 +265,17 @@ pub async fn execute_with_embedded(
     // Create a WebSocket client
     let client = WebSocketClient::new(&service.url(), false);
     
-    // Process arguments
-    let args_json = process_args(args);
+    // Parse command and arguments using command_parser
+    let command_args = vec![prism.to_string(), frequency.to_string()]
+        .into_iter()
+        .chain(args.iter().cloned())
+        .collect::<Vec<String>>();
+    
+    let command = uv_core::command_parser::parse_command(&command_args)
+        .map_err(|e| anyhow!("Command parsing error: {}", e))?;
     
     // Execute the command
-    client.execute(prism, frequency, args_json).await
+    client.execute(&command.prism_id, &command.frequency, command.structured_input).await
 }
 
 /// Execute a command against a remote service
@@ -283,47 +289,15 @@ pub async fn execute_remote(
     // Create a WebSocket client
     let client = WebSocketClient::new(remote, secure);
     
-    // Process arguments
-    let args_json = process_args(args);
+    // Parse command and arguments using command_parser
+    let command_args = vec![prism.to_string(), frequency.to_string()]
+        .into_iter()
+        .chain(args.iter().cloned())
+        .collect::<Vec<String>>();
+    
+    let command = uv_core::command_parser::parse_command(&command_args)
+        .map_err(|e| anyhow!("Command parsing error: {}", e))?;
     
     // Execute the command
-    client.execute(prism, frequency, args_json).await
-}
-
-/// Process arguments into a JSON object
-fn process_args(args: &[String]) -> Value {
-    let mut result = serde_json::json!({});
-    
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-        
-        if arg.starts_with("--") {
-            let key = &arg[2..];
-            
-            // Check for --key=value format
-            if let Some(eq_pos) = key.find('=') {
-                let (real_key, value) = key.split_at(eq_pos);
-                result[real_key] = serde_json::json!(value[1..]);
-            } 
-            // Otherwise expect --key value format
-            else if i + 1 < args.len() {
-                result[key] = serde_json::json!(args[i + 1]);
-                i += 1; // Skip next arg since we used it as value
-            } else {
-                // Treat as boolean flag if no value
-                result[key] = serde_json::json!(true);
-            }
-        } else {
-            // Add positional arguments with numeric keys
-            // Skip the first one which is the command name
-            if i > 0 {
-                result[format!("arg{}", i)] = serde_json::json!(arg);
-            }
-        }
-        
-        i += 1;
-    }
-    
-    result
+    client.execute(&command.prism_id, &command.frequency, command.structured_input).await
 }

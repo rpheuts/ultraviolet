@@ -102,10 +102,10 @@
       "target": "aws:curl",
       "frequency": "post",
       "transpose": {
-        "target.url": "url",
-        "target.body": "body?",
-        "target.method": "method?",
-        "target.headers": "headers?"
+        "url": "url",
+        "body": "body?",
+        "method": "method?",
+        "headers": "headers?"
       },
       "reflection": {
         "status": "status",

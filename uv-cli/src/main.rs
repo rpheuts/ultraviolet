@@ -77,15 +77,30 @@ async fn main() -> Result<()> {
     
     debug!("Executing {} for prism {}", frequency, prism);
     
+    // Filter global CLI arguments to get just the command args
+    let global_arg_prefixes = [
+        "--service", "--remote", "--secure", "--bind", "--tls", 
+        "--cert", "--key", "--static-dir", "--raw", "--no-color",
+        "--debug", "--quiet"
+    ];
+    
+    // Extract command-specific arguments using the command parser helper
+    let filtered_args = uv_core::command_parser::extract_command_args(
+        &cli.args, 
+        &global_arg_prefixes
+    );
+    
+    debug!("Executing {} for prism {} with args: {:?}", frequency, prism, filtered_args);
+    
     // Execute the command
     let result = if let Some(remote) = &cli.remote {
         // Connect to a remote service
         debug!("Using remote service at {}", remote);
-        execute_remote(remote, cli.secure, prism, frequency, &cli.args).await?
+        execute_remote(remote, cli.secure, prism, frequency, &filtered_args).await?
     } else {
         // Start embedded service and execute locally
         debug!("Using embedded service");
-        execute_with_embedded(prism, frequency, &cli.args).await?
+        execute_with_embedded(prism, frequency, &filtered_args).await?
     };
     
     // Print the result

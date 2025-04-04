@@ -72,6 +72,16 @@ impl UVSpectrum {
         self.wavelengths.iter().find(|w| w.frequency == frequency)
     }
     
+    /// Get the input schema for a specific frequency
+    pub fn get_input_schema(&self, frequency: &str) -> Option<&SchemaDefinition> {
+        self.find_wavelength(frequency).map(|w| &w.input)
+    }
+    
+    /// Get the output schema for a specific frequency
+    pub fn get_output_schema(&self, frequency: &str) -> Option<&SchemaDefinition> {
+        self.find_wavelength(frequency).map(|w| &w.output)
+    }
+    
     /// Find a refraction by its name
     pub fn find_refraction(&self, name: &str) -> Option<&Refraction> {
         self.refractions.iter().find(|r| r.name == name)

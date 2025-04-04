@@ -13,6 +13,8 @@ mod link;
 mod prism;
 mod prism_core;
 mod multiplexer;
+pub mod args_processor;
+pub mod command_parser;
 
 // Re-export core types
 pub use pulse::{UVPulse, Wavefront, Photon, Trap};
