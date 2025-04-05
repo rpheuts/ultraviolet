@@ -13,13 +13,11 @@ mod link;
 mod prism;
 mod prism_core;
 mod multiplexer;
-pub mod args_processor;
-pub mod command_parser;
 
 // Re-export core types
 pub use pulse::{UVPulse, Wavefront, Photon, Trap};
 pub use error::{UVError, Result};
-pub use spectrum::{UVSpectrum, Wavelength, SchemaDefinition};
+pub use spectrum::{UVSpectrum, UVWavelength, UVSchemaDefinition};
 pub use refraction::{Refraction, PropertyMapper};
 pub use transport::{Transport, create_transport_pair};
 pub use link::UVLink;

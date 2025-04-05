@@ -225,5 +225,6 @@ pub fn property_to_value(prop: &PropertyValue) -> Result<Value> {
         PropertyValue::URL(s) => Ok(Value::String(s.clone())),
         PropertyValue::FilePath(p) => Ok(Value::String(p.to_string_lossy().to_string())),
         PropertyValue::Other(v) => Ok(v.clone()),
+        PropertyValue::Component(_) => Ok(Value::String("[nested component]".to_string())),
     }
 }

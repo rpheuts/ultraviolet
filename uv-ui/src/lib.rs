@@ -77,6 +77,8 @@ pub enum PropertyValue {
     FilePath(PathBuf),
     /// For values that don't fit into other categories
     Other(Value),
+    /// Nested UI component for hierarchical structure
+    Component(Box<UIComponent>),
 }
 
 impl PropertyValue {
@@ -91,6 +93,7 @@ impl PropertyValue {
             PropertyValue::URL(_) => DataType::URL,
             PropertyValue::FilePath(_) => DataType::FilePath,
             PropertyValue::Other(_) => DataType::Custom("Other".to_string()),
+            PropertyValue::Component(_) => DataType::Custom("Component".to_string()),
         }
     }
 }

@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
-members = [
+members = [ "clients/cli",
     "uv-core",
-    "uv-cli",
     "uv-service",
     "uv-ui",
-    "prisms/example/echo",
+
+    "clients/cli",
+
     "prisms/aws/curl",
     "prisms/aws/burner",
-    "prisms/core/command",
 ]
 
 [workspace.dependencies]

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::fs;
+use jsonschema::JSONSchema;
 
 use crate::{refraction::Refraction, UVError};
 
@@ -31,7 +32,7 @@ pub struct UVSpectrum {
     pub tags: Vec<String>,
     
     /// Available frequencies (methods) that the prism can handle
-    pub wavelengths: Vec<Wavelength>,
+    pub wavelengths: Vec<UVWavelength>,
     
     /// Dependencies on other prisms
     #[serde(default)]
@@ -40,7 +41,7 @@ pub struct UVSpectrum {
 
 /// Definition of a method/function that a prism can handle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Wavelength {
+pub struct UVWavelength {
     /// Name of the frequency (method)
     pub frequency: String,
     
@@ -48,15 +49,15 @@ pub struct Wavelength {
     pub description: String,
     
     /// Input schema definition
-    pub input: SchemaDefinition,
+    pub input: UVSchemaDefinition,
     
     /// Output schema definition
-    pub output: SchemaDefinition,
+    pub output: UVSchemaDefinition,
 }
 
 /// Schema definition for input/output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SchemaDefinition {
+pub struct UVSchemaDefinition {
     /// The schema definition, typically a JSON Schema
     #[serde(flatten)]
     pub schema: Value,
@@ -68,17 +69,17 @@ pub struct SchemaDefinition {
 
 impl UVSpectrum {    
     /// Find a wavelength by its frequency name
-    pub fn find_wavelength(&self, frequency: &str) -> Option<&Wavelength> {
+    pub fn find_wavelength(&self, frequency: &str) -> Option<&UVWavelength> {
         self.wavelengths.iter().find(|w| w.frequency == frequency)
     }
     
     /// Get the input schema for a specific frequency
-    pub fn get_input_schema(&self, frequency: &str) -> Option<&SchemaDefinition> {
+    pub fn get_input_schema(&self, frequency: &str) -> Option<&UVSchemaDefinition> {
         self.find_wavelength(frequency).map(|w| &w.input)
     }
     
     /// Get the output schema for a specific frequency
-    pub fn get_output_schema(&self, frequency: &str) -> Option<&SchemaDefinition> {
+    pub fn get_output_schema(&self, frequency: &str) -> Option<&UVSchemaDefinition> {
         self.find_wavelength(frequency).map(|w| &w.output)
     }
     
@@ -130,5 +131,15 @@ impl UVSpectrum {
         let spectrum: UVSpectrum = serde_json::from_str(&content)?;
         
         Ok(spectrum)
+    }
+}
+
+impl UVSchemaDefinition {
+    pub fn validate(&self, value: &Value) -> Result<(), UVError> {
+        JSONSchema::compile(&self.schema)
+            .map_err(|e| UVError::InvalidInput(format!("Input validation error: {}", e)))?
+            .validate(value)
+            .map_err(|_e| UVError::InvalidInput(format!("Input validation error")))?;
+        Ok(())
     }
 }

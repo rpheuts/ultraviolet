@@ -40,8 +40,22 @@ impl UIInferenceEngine {
         let mut properties = HashMap::new();
         
         for (key, val) in obj {
-            let prop_value = self.type_detectors.detect(val);
-            properties.insert(key.clone(), prop_value);
+            // For objects or arrays, try to recursively infer a nested component
+            if val.is_object() || val.is_array() {
+                match self.infer(val) {
+                    Ok(component) => {
+                        // Successfully inferred a nested component
+                        properties.insert(key.clone(), PropertyValue::Component(Box::new(component)));
+                    },
+                    Err(_) => {
+                        // Fall back to regular detection if inference fails
+                        properties.insert(key.clone(), self.type_detectors.detect(val));
+                    }
+                }
+            } else {
+                // For primitive values, use regular detection
+                properties.insert(key.clone(), self.type_detectors.detect(val));
+            }
         }
         
         // Create a card with the properties

@@ -52,7 +52,7 @@ impl PrismMultiplexer {
     }
     
     /// Load a spectrum for a prism.
-    pub fn load_spectrum(&self, prism_id: &str) -> Result<Arc<UVSpectrum>> {        
+    fn load_spectrum(&self, prism_id: &str) -> Result<Arc<UVSpectrum>> {        
         // Load the spectrum
         let spectrum = UVSpectrum::new(prism_id)?;
         let spectrum_arc = Arc::new(spectrum);

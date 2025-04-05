@@ -8,8 +8,6 @@ use uv_ui::{UIComponent, PropertyValue, Card, Table, List, Text};
 
 /// Renderer for CLI output
 pub struct CliRenderer {
-    /// Whether to use color in output
-    colored: bool,
     /// Maximum width for tables
     max_width: usize,
 }
@@ -18,15 +16,8 @@ impl CliRenderer {
     /// Create a new CLI renderer
     pub fn new() -> Self {
         Self {
-            colored: true,
             max_width: 120,
         }
-    }
-
-    /// Set whether to use color
-    pub fn with_color(mut self, colored: bool) -> Self {
-        self.colored = colored;
-        self
     }
     
     /// Render a component to the given writer
@@ -46,13 +37,8 @@ impl CliRenderer {
         
         // Render the title
         if title.len() > 0 {
-            if self.colored {
-                writeln!(writer, "{}", title.green().bold())?;
-                writeln!(writer, "{}", "═".repeat(title.len()).green())?;
-            } else {
-                writeln!(writer, "{}", title)?;
-                writeln!(writer, "{}", "═".repeat(title.len()))?;
-            }
+            writeln!(writer, "{}", title.green().bold())?;
+            writeln!(writer, "{}", "═".repeat(title.len()).green())?;
         }
 
         // If there is only 1 item, just render it
@@ -64,11 +50,7 @@ impl CliRenderer {
         
         // Render properties
         for (key, value) in &card.properties {
-            if self.colored {
-                write!(writer, "  {}: ", key.blue())?;
-            } else {
-                write!(writer, "  {}: ", key)?;
-            }
+            write!(writer, "  {}: ", key.blue())?;
             self.render_property_value(value, writer)?;
             writeln!(writer)?;
         }
@@ -119,11 +101,7 @@ impl CliRenderer {
         write!(writer, "  ")?;
         for (i, col) in table.columns.iter().enumerate() {
             let name = format!("{:width$}", col.name, width = widths[i]);
-            if self.colored {
-                write!(writer, "{} │ ", name.green().bold())?;
-            } else {
-                write!(writer, "{} │ ", name)?;
-            }
+            write!(writer, "{} │ ", name.green().bold())?;
         }
         writeln!(writer)?;
         
@@ -167,11 +145,7 @@ impl CliRenderer {
         }
         
         for (i, item) in list.items.iter().enumerate() {
-            if self.colored {
-                write!(writer, "  {}. ", (i + 1).to_string().yellow())?;
-            } else {
-                write!(writer, "  {}. ", i + 1)?;
-            }
+            write!(writer, "  {}. ", (i + 1).to_string().yellow())?;
             self.render_property_value(item, writer)?;
             writeln!(writer)?;
         }
@@ -183,7 +157,7 @@ impl CliRenderer {
     fn render_text(&self, text: &Text, writer: &mut impl Write) -> std::io::Result<()> {
         // Check if we should format as code block
         if let Some(format) = &text.format {
-            if format == "json" && self.colored {
+            if format == "json" {
                 writeln!(writer, "{}", "```json".dimmed())?;
                 // Simple pretty-printing for JSON
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text.content) {
@@ -201,7 +175,7 @@ impl CliRenderer {
                 return Ok(());
             }
             
-            if format == "markdown" && self.colored {
+            if format == "markdown" {
                 // Very basic markdown rendering
                 for line in text.content.lines() {
                     if line.starts_with("# ") {
@@ -224,21 +198,30 @@ impl CliRenderer {
     
     /// Render a property value
     fn render_property_value(&self, value: &PropertyValue, writer: &mut impl Write) -> std::io::Result<()> {
-        let value_str = self.property_value_to_string(value);
-        
-        // Colorize based on data type
-        if self.colored {
-            match value {
-                PropertyValue::Boolean(true) => write!(writer, "{}", value_str.green()),
-                PropertyValue::Boolean(false) => write!(writer, "{}", value_str.red()),
-                PropertyValue::Number(_) => write!(writer, "{}", value_str.yellow()),
-                PropertyValue::Date(_) => write!(writer, "{}", value_str.cyan()),
-                PropertyValue::URL(_) => write!(writer, "{}", value_str.underline().blue()),
-                PropertyValue::FilePath(_) => write!(writer, "{}", value_str.underline()),
-                _ => write!(writer, "{}", value_str),
+        match value {
+            PropertyValue::Component(component) => {
+                // For nested components, render them directly
+                writeln!(writer)?;
+                self.render(component, writer)
+            },
+            _ => {
+                // For regular values, render as before
+                let value_str = self.property_value_to_string(value);
+                
+                // Colorize based on data type
+                match value {
+                    PropertyValue::Boolean(true) => write!(writer, "{}", value_str.green()),
+                    PropertyValue::Boolean(false) => write!(writer, "{}", value_str.red()),
+                    PropertyValue::Number(_) => write!(writer, "{}", value_str.yellow()),
+                    PropertyValue::Date(_) => write!(writer, "{}", value_str.cyan()),
+                    PropertyValue::URL(_) => write!(writer, "{}", value_str.underline().blue()),
+                    PropertyValue::FilePath(_) => write!(writer, "{}", value_str.underline()),
+                    PropertyValue::Component(_) => write!(writer, "{}", value_str), // This line is for pattern exhaustiveness
+                    PropertyValue::Text(_) => write!(writer, "{}", value_str),
+                    PropertyValue::Duration(_) => write!(writer, "{}", value_str),
+                    PropertyValue::Other(_) => write!(writer, "{}", value_str),
+                }
             }
-        } else {
-            write!(writer, "{}", value_str)
         }
     }
     
@@ -252,6 +235,7 @@ impl CliRenderer {
             PropertyValue::Duration(d) => format_duration(*d),
             PropertyValue::URL(url) => url.clone(),
             PropertyValue::FilePath(path) => path.to_string_lossy().to_string(),
+            PropertyValue::Component(_) => "[nested component]".to_string(),
             PropertyValue::Other(val) => match val {
                 serde_json::Value::Null => "null".to_string(),
                 _ => val.to_string(),

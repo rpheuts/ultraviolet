@@ -87,7 +87,7 @@ main() {
     # Install CLI
     log "Installing UV CLI..."
     mkdir -p "$install_dir/bin"
-    cp "target/release/uv-cli" "$install_dir/bin/uv" || \
+    cp "target/release/cli" "$install_dir/bin/uv" || \
         error "Failed to install CLI"
     
     # Install prisms from old structure
