@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use serde_json::Value;
 use libloading::{Library, Symbol};
@@ -136,39 +137,31 @@ impl PrismMultiplexer {
         
         // Clone everything needed for the new thread
         let prism_id = prism_id.to_string();
-        let multiplexer = self.clone();
+
+        // Create a new prism instance
+        let mut prism = match self.load_prism(&prism_id) {
+            Ok(p) => p,
+            Err(e) => {
+                // Report initialization error
+                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                return Err(UVError::ExecutionError("Failed to load prism".to_string()));
+            }
+        };
+        
+        // Load the spectrum for the prism
+        let spectrum = match self.load_spectrum(&prism_id) {
+            Ok(s) => s,
+            Err(e) => {
+                // Report initialization error
+                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
+                return Err(UVError::ExecutionError("Failed to load spectrum".to_string()));
+            }
+        };
         
         // Spawn a thread to run the prism
         thread::spawn(move || {
-            // Create a new prism instance
-            let mut prism = match multiplexer.load_prism(&prism_id) {
-                Ok(p) => p,
-                Err(e) => {
-                    // Report initialization error
-                    let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
-                    return;
-                }
-            };
-            
-            // Load the spectrum for the prism
-            let spectrum = match multiplexer.load_spectrum(&prism_id) {
-                Ok(s) => s,
-                Err(e) => {
-                    // Report initialization error
-                    let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
-                    return;
-                }
-            };
-            
             // Initialize the prism with its spectrum
-            if let Err(e) = prism.init_spectrum((*spectrum).clone()) {
-                // Report initialization error
-                let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
-                return;
-            }
-            
-            // Initialize the prism with access to the multiplexer
-            if let Err(e) = prism.init_multiplexer(Arc::new(multiplexer)) {
+            if let Err(e) = prism.init((*spectrum).clone()) {
                 // Report initialization error
                 let _ = prism_link.emit_trap(Uuid::nil(), Some(e));
                 return;
@@ -213,5 +206,20 @@ impl PrismMultiplexer {
         
         // Return the link for receiving responses
         Ok(link)
+    }
+
+    pub fn refract_and_absorb<T>(&self, name: &str, spectrum: &UVSpectrum, payload: Value) -> Result<T>
+    where
+    T: DeserializeOwned {
+        // Find the refraction
+        let refraction = spectrum
+            .find_refraction(name)
+            .ok_or_else(|| UVError::RefractionError(format!("{} refraction not found", name)))?;
+            
+        // Call the refraction
+        let link = self.refract(refraction, payload)?;
+            
+        // Get the response
+        link.absorb()
     }
 }

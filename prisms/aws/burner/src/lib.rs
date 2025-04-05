@@ -7,7 +7,6 @@ pub mod spectrum;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
 use uuid::Uuid;
 
 use uv_core::{
@@ -22,7 +21,7 @@ use crate::spectrum::{
 /// Burner prism for managing AWS accounts
 pub struct BurnerPrism {
     spectrum: Option<UVSpectrum>,
-    multiplexer: Option<Arc<PrismMultiplexer>>,
+    multiplexer: PrismMultiplexer,
 }
 
 impl BurnerPrism {
@@ -30,15 +29,16 @@ impl BurnerPrism {
     pub fn new() -> Self {
         Self {
             spectrum: None,
-            multiplexer: None,
+            multiplexer: PrismMultiplexer::new(),
         }
     }
 
     /// Get CSRF token required for mutation operations
     fn get_csrf_token(&self) -> Result<String> {
         // Use the curl.get refraction
-        let response = self.refract(
+        let response = self.multiplexer.refract_and_absorb::<HttpResponse>(
             "curl.get",
+            self.spectrum.as_ref().unwrap(),
             json!({
                 "url": "https://conduit.security.a2z.com/api/token"
             })
@@ -51,30 +51,12 @@ impl BurnerPrism {
         Ok(token_response.token)
     }
     
-    /// Call a refraction with the given name and payload
-    fn refract(&self, name: &str, payload: Value) -> Result<HttpResponse> {
-        // Find the refraction
-        let refraction = self.spectrum
-            .as_ref()
-            .expect("Prism not initialized")
-            .find_refraction(name)
-            .ok_or_else(|| UVError::RefractionError(format!("{} refraction not found", name)))?;
-            
-        // Call the refraction
-        let link = self.multiplexer
-            .as_ref()
-            .expect("Multiplexer not initialized")
-            .refract(refraction, payload)?;
-            
-        // Get the response
-        link.absorb()
-    }
-    
     /// Handle list frequency
     fn handle_list(&self, id: Uuid, _input: ListInput, link: &UVLink) -> Result<()> {
         // Use the curl.get refraction to get burner accounts
-        let response = self.refract(
+        let response = self.multiplexer.refract_and_absorb::<HttpResponse>(
             "curl.get",
+            self.spectrum.as_ref().unwrap(),
             json!({
                 "url": "https://conduit.security.a2z.com/api/accounts/burner"
             })
@@ -112,8 +94,9 @@ impl BurnerPrism {
         headers.insert("anti-csrftoken-a2z".to_string(), token);
         
         // Use the curl.post refraction to create a burner account
-        let response = self.refract(
+        let response = self.multiplexer.refract_and_absorb::<HttpResponse>(
             "curl.post",
+            self.spectrum.as_ref().unwrap(),
             json!({
                 "url": format!("https://conduit.security.a2z.com/api/accounts/burner/accountName/{}", input.name),
                 "headers": headers,
@@ -179,8 +162,9 @@ impl BurnerPrism {
         headers.insert("anti-csrftoken-a2z".to_string(), token);
         
         // Use the curl.post refraction to delete a burner account
-        let response = self.refract(
+        let response = self.multiplexer.refract_and_absorb::<HttpResponse>(
             "curl.post",
+            self.spectrum.as_ref().unwrap(),
             json!({
                 "url": format!("https://conduit.security.a2z.com/api/accounts/burner/accountName/{}", input.name),
                 "method": "DELETE",
@@ -220,8 +204,9 @@ impl BurnerPrism {
     /// Handle url frequency
     fn handle_url(&self, id: Uuid, input: UrlInput, link: &UVLink) -> Result<()> {
         // Use the curl.get refraction to get console URL
-        let response = self.refract(
+        let response = self.multiplexer.refract_and_absorb::<HttpResponse>(
             "curl.get",
+            self.spectrum.as_ref().unwrap(),
             json!({
                 "url": format!(
                     "https://conduit.security.a2z.com/api/burner/consoleUrl?awsAccountId={}&awsPartition=aws&sessionDuration=10800", 
@@ -247,18 +232,9 @@ impl BurnerPrism {
 }
 
 impl UVPrism for BurnerPrism {
-    fn init_spectrum(&mut self, spectrum: UVSpectrum) -> Result<()> {
+    fn init(&mut self, spectrum: UVSpectrum) -> Result<()> {
         self.spectrum = Some(spectrum);
         Ok(())
-    }
-    
-    fn init_multiplexer(&mut self, multiplexer: Arc<PrismMultiplexer>) -> Result<()> {
-        self.multiplexer = Some(multiplexer);
-        Ok(())
-    }
-    
-    fn spectrum(&self) -> &UVSpectrum {
-        self.spectrum.as_ref().expect("Prism not initialized")
     }
     
     fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {

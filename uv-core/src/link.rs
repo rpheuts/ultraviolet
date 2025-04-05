@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -47,13 +47,7 @@ impl UVLink {
         )
     }
     
-    /// Establish a link with a prism.
-    ///
-    /// This function calls the prism's on_link_established method to set up
-    /// the communication channel.
-    pub fn establish_with(&self, prism: &mut dyn crate::prism::UVPrism) -> Result<()> {
-        prism.link_established(self)
-    }
+
     
     /// Send a wavefront to initiate a request.
     ///
@@ -179,30 +173,5 @@ impl UVLink {
         // Deserialize into the expected type
         let typed_result = serde_json::from_value(result)?;
         Ok(typed_result)
-    }
-    
-    /// Reflect data back as photon(s) and a success trap.
-    ///
-    /// This function serializes the data, sends it as one or more photons,
-    /// and then sends a success trap.
-    pub fn reflect<T>(&self, id: Uuid, data: T) -> Result<()>
-    where
-        T: Serialize,
-    {
-        let value = serde_json::to_value(data)?;
-        
-        // If it's an array, send multiple photons
-        if let Value::Array(items) = value {
-            for item in items {
-                self.emit_photon(id, item)?;
-            }
-        } else {
-            // Otherwise, send a single photon
-            self.emit_photon(id, value)?;
-        }
-        
-        // Send a success trap
-        self.emit_trap(id, None)?;
-        Ok(())
     }
 }

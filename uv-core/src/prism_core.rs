@@ -38,11 +38,6 @@ impl UVPrismCore {
                             // Let the prism handle the extinguish pulse first
                             let _ = self.prism.handle_pulse(id, &UVPulse::Extinguish, &link);
                             
-                            // Call the shutdown hook
-                            if let Err(e) = self.prism.shutdown() {
-                                eprintln!("Error during prism shutdown: {}", e);
-                            }
-                            
                             break; // Exit the loop
                         },
                         ref other_pulse => {

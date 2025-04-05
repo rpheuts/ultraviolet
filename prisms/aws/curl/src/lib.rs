@@ -8,11 +8,10 @@ pub mod spectrum;
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Arc;
 use uuid::Uuid;
 
 use uv_core::{
-    Result, UVError, UVLink, UVPrism, PrismMultiplexer, UVPulse, UVSpectrum
+    Result, UVError, UVLink, UVPrism, UVPulse, UVSpectrum
 };
 
 use crate::spectrum::{GetInput, HttpResponse, PostInput};
@@ -148,18 +147,9 @@ impl CurlPrism {
 }
 
 impl UVPrism for CurlPrism {
-    fn init_spectrum(&mut self, spectrum: UVSpectrum) -> Result<()> {
+    fn init(&mut self, spectrum: UVSpectrum) -> Result<()> {
         self.spectrum = Some(spectrum);
         Ok(())
-    }
-
-    fn init_multiplexer(&mut self, _multiplexer: Arc<PrismMultiplexer>) -> Result<()> {
-        // Curl prism doesn't need the multiplexer
-        Ok(())
-    }
-    
-    fn spectrum(&self) -> &UVSpectrum {
-        self.spectrum.as_ref().expect("Prism not initialized")
     }
     
     fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {

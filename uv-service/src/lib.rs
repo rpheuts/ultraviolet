@@ -5,12 +5,13 @@
 //! bridge between WebSocket clients and the prism ecosystem.
 
 pub mod server;
-pub mod router;
-pub mod options;
+pub mod request_handler;
+pub mod uv_handler;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use server::UVServer;
 use thiserror::Error;
 use uv_core::UVError;
 
@@ -100,5 +101,5 @@ impl Default for ServiceOptions {
 ///
 /// This is the main entry point for starting the service programmatically.
 pub async fn start_service(options: ServiceOptions) -> Result<()> {
-    server::run_server(options).await
+    UVServer::run_server(options).await
 }

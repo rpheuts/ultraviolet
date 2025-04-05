@@ -9,6 +9,7 @@ members = [ "clients/cli",
 
     "prisms/aws/curl",
     "prisms/aws/burner",
+    "prisms/aws/accounts",
 ]
 
 [workspace.dependencies]
