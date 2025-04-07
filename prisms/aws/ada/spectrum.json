@@ -1,0 +1,67 @@
+{
+  "name": "ada",
+  "namespace": "aws",
+  "version": "0.1.0",
+  "description": "AWS Ada credentials management",
+  "wavelengths": [
+    {
+      "frequency": "credentials",
+      "description": "Update AWS credentials for an account",
+      "input": {
+        "type": "object",
+        "properties": {
+          "account": {"type": "string"},
+          "provider": {"type": "string"},
+          "role": {"type": "string"}
+        },
+        "required": ["account"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"}
+        },
+        "required": ["success", "message"]
+      }
+    },
+    {
+      "frequency": "provision",
+      "description": "Provision an account for credential acquisition",
+      "input": {
+        "type": "object",
+        "properties": {
+          "account": {"type": "string"}
+        },
+        "required": ["account"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"}
+        },
+        "required": ["success", "message"]
+      }
+    },
+    {
+      "frequency": "admin",
+      "description": "Get admin credentials directly",
+      "input": {
+        "type": "object",
+        "properties": {
+          "account": {"type": "string"}
+        },
+        "required": ["account"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"}
+        },
+        "required": ["success", "message"]
+      }
+    }
+  ]
+}
