@@ -39,7 +39,7 @@ pub fn render_cli_table(value: &Value, _schema: &UVSchemaDefinition) -> Result<(
 
 fn render_table_row(row_object: &Value) -> Result<Vec<String>> {
     let values: Vec<String> = match row_object.as_object() {
-        Some(obj) => obj.values().map(|v| v.as_str().unwrap().to_string()).collect(),
+        Some(obj) => obj.values().map(|v| v.as_str().or(Some("-")).unwrap().to_string()).collect(),
         None => {
             return Err(anyhow!("Unable to parse table row object"));
         }

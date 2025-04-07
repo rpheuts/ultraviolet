@@ -17,7 +17,7 @@
           "type": "object",
           "properties": {
             "accountName": {"type": "string"},
-            "awsAccountId": {"type": "string"},
+            "awsAccountId?": {"type": "string"},
             "status": {"type": "string"},
             "validTill": {"type": "string"},
             "user": {"type": "string"}

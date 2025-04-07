@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::fs;
 use jsonschema::JSONSchema;
@@ -88,28 +89,52 @@ impl UVSpectrum {
         self.refractions.iter().find(|r| r.name == name)
     }
 
+    pub fn resolve_prism_id(name:&String) -> Result<(String, String), UVError> {
+        let install_dir = Self::get_install_dir()?
+            .join("prisms");
+
+        if let Some((namespace, prism_name)) = name.split_once(':') {
+            if namespace.is_empty() || prism_name.is_empty() {
+                return Err(UVError::InvalidInput(format!("Invalid prism ID format: {}", name)));
+            }
+            return Ok((prism_name.to_string(), namespace.to_string()));
+        }
+
+        let prisms = Self::find_prisms(&install_dir, &name.to_string())?;
+
+        match prisms.len() {
+            0 => Err(UVError::InvalidInput(format!("No prism found for: {}", name))),
+            1 => {
+                let mut path = prisms[0].clone();
+                path.pop(); // remove file name
+                let namespace = path.file_name()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| UVError::InvalidInput("Invalid path structure".to_string()))?;
+                Ok((name.to_string(), namespace.to_string()))
+            },
+            _ => Err(UVError::InvalidInput(format!(
+                "Multiple prisms found, please specify namespace for: {}",
+                name
+            ))),
+        }
+    }
+
     pub fn new(prism_id: &str) -> Result<UVSpectrum, UVError> {
         // Parse the prism ID to get namespace and name
         let parts: Vec<&str> = prism_id.split(':').collect();
         if parts.len() != 2 {
             return Err(UVError::InvalidInput(format!("Invalid prism ID format: {}", prism_id)));
         }
-        
-        let namespace = parts[0];
-        let name = parts[1];
-        
-        // If not found, try the standard location
-        if let Ok(install_dir) = Self::get_install_dir() {
-            let standard_path = install_dir
-                .join("prisms")
-                .join(namespace)
-                .join(name)
-                .join("spectrum.json");
+
+        let path = Self::get_install_dir()?
+            .join("prisms")
+            .join(parts[0])
+            .join(parts[1])
+            .join("spectrum.json");
             
-            if standard_path.exists() {
-                return Self::try_load_from_path(&standard_path);
+            if path.exists() {
+                return Self::try_load_from_path(&path);
             }
-        }
         
         // If we get here, we couldn't find the spectrum file
         Err(UVError::Other(format!("Spectrum file not found for prism: {}", prism_id)))
@@ -120,6 +145,23 @@ impl UVSpectrum {
         let home_dir = std::env::var("HOME").map_err(|_| UVError::Other("HOME environment variable not set".to_string()))?;
         let install_dir = std::env::var("UV_INSTALL_DIR").unwrap_or(format!("{}/.uv", home_dir));
         Ok(PathBuf::from(install_dir))
+    }
+
+    fn find_prisms(path: &PathBuf, prism: &String) -> Result<Vec<PathBuf>, UVError> {
+        let mut result: Vec<PathBuf> = Vec::new();
+
+        for dir in fs::read_dir(path)? {
+            let sub_path = dir?.path();
+            if sub_path.is_dir() {
+                if sub_path.file_name().unwrap().eq(OsStr::new(&prism)) {
+                    result.push(sub_path);
+                } else {
+                    result.append(&mut Self::find_prisms(&sub_path, &prism)?);
+                }
+            }
+        }
+
+        Ok(result)
     }
     
     /// Try to load a spectrum from a specific path.

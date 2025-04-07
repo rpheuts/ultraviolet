@@ -1,4 +1,4 @@
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 pub fn parse_args_to_map(args: &[String]) -> Map<String, Value> {
     let mut map = Map::new();
@@ -26,6 +26,8 @@ pub fn parse_args_to_map(args: &[String]) -> Map<String, Value> {
                     }
                 }
             }
+        } else {
+            map.insert("default".to_string(), json!(arg));
         }
     }
 

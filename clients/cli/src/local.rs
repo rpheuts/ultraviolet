@@ -3,13 +3,16 @@ use serde_json::Value;
 use uuid::Uuid;
 use uv_core::{PrismMultiplexer, UVLink, UVSchemaDefinition, UVSpectrum};
 
-use crate::{parsing::cli_args::parse_args_to_map, rendering::cli_renderer::{render_array, render_object, render_stream}};
+use crate::{parsing::{cli_args::parse_args_to_map, cli_preprocessor::preprocess}, rendering::cli_renderer::{render_array, render_object, render_stream}};
 
 
 pub fn handle_local(prism: &str, args: Vec<String>) -> Result<()> {
+    let (name, namespace) = UVSpectrum::resolve_prism_id(&prism.to_string())?;
+    let prism_id = format!("{}:{}", namespace, name);
+
     // Find the spectrum for the given prism
-    let spectrum = UVSpectrum::new(&prism)
-        .context(format!("Unable to find spectrum for prism {}", prism))?;
+    let spectrum = UVSpectrum::new(&prism_id)
+        .context(format!("Unable to find spectrum for prism {}", prism_id))?;
 
     // Extract the frequency from the arguments
     let (frequency, args) = args.split_first()
@@ -17,29 +20,30 @@ pub fn handle_local(prism: &str, args: Vec<String>) -> Result<()> {
 
     // Find the wavelength in the spectrum for the given prism
     let wavelength = spectrum.find_wavelength(frequency)
-        .context(format!("Unable to find frequency {} on prism {}", frequency, prism))?;
+        .context(format!("Unable to find frequency {} on prism {}", frequency, prism_id))?;
 
     // Parse the remaining arguments into an input object
-    let input = serde_json::Value::Object(parse_args_to_map(args));
+    let mut input = serde_json::Value::Object(parse_args_to_map(args));
+    input = preprocess(input, &wavelength.input)?;
 
     // Validate the input against the schema
     wavelength.input.validate(&input)?;
 
     // Send the wavefront and return the link
-    let link = send_wavefront(prism, &frequency, input)?;
+    let link = send_wavefront(&prism_id, &frequency, input)?;
 
     // Process the response
     process_response(link, &wavelength.output)
 }
 
-fn send_wavefront(prism: &str, frequency: &str, input: Value) -> Result<UVLink> {
+fn send_wavefront(prism_id: &String, frequency: &str, input: Value) -> Result<UVLink> {
     let multiplexer = PrismMultiplexer::new();
 
     // Establish link to prism
-    let link = multiplexer.establish_link(prism)?;
+    let link = multiplexer.establish_link(prism_id)?;
 
     // Send the wavefront
-    link.send_wavefront(Uuid::new_v4(), prism, frequency, input)?;
+    link.send_wavefront(Uuid::new_v4(), prism_id, frequency, input)?;
 
     Ok(link)
 }

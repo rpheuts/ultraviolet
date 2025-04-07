@@ -14,7 +14,7 @@ pub struct Account {
     pub account_name: String,
     
     #[serde(rename = "awsAccountId")]
-    pub aws_account_id: String,
+    pub aws_account_id: Option<String>,
     
     pub status: String,
     
