@@ -44,9 +44,9 @@ async fn main() -> Result<()> {
 fn init_tracing(debug: bool) {
     // Initialize tracing with filter based on debug/quiet flags
     let filter = if debug {
-        "uv_cli=debug,uv_service=debug"
+        "cli=debug,uv_service=debug"
     } else {
-        "uv_cli=warn,uv_service=warn"
+        "cli=info,uv_service=info"
     };
     
     tracing_subscriber::fmt()

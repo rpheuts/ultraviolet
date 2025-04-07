@@ -64,7 +64,7 @@ impl UVServer {
 
         // Wrap the sender in Arc<Mutex<>> so it can be shared
         let sender = Arc::new(Mutex::new(sender));
-        info!("WebSocket connection established");
+        debug!("WebSocket connection established");
         
         // Process incoming messages
         while let Some(msg) = receiver.next().await {
@@ -75,7 +75,7 @@ impl UVServer {
                     self.handler.process_request(text, &sender).await;
                 },
                 Ok(Message::Close(_)) => {
-                    info!("WebSocket connection closed by client");
+                    debug!("WebSocket connection closed by client");
                     break;
                 },
                 Ok(_) => {

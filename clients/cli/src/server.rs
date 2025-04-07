@@ -16,7 +16,7 @@ pub async fn handle_server(bind_address: SocketAddr, debug: bool) -> Result<()> 
         key_path: None,
         serve_static: false,
         static_dir: None,
-        init_tracing: false, // Don't initialize tracing again (already done in CLI)
+        init_tracing: false,
         log_level,
     };
 
