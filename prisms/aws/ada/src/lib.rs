@@ -145,8 +145,6 @@ impl AdaPrism {
                         "Effect": "Allow",
                         "Principal": {
                             "AWS": [
-                                "arn:aws:iam::621463273587:role/BrokerService-Prod",
-                                "arn:aws:iam::048851363556:role/BrokerService-Prod",
                                 "arn:aws:iam::187792406069:user/blue-cli"
                             ]
                         },
@@ -162,8 +160,6 @@ impl AdaPrism {
                         "Effect": "Allow",
                         "Principal": {
                             "AWS": [
-                                "arn:aws:iam::621463273587:role/BrokerService-Prod",
-                                "arn:aws:iam::048851363556:role/BrokerService-Prod",
                                 "arn:aws:iam::187792406069:user/blue-cli"
                             ]
                         },

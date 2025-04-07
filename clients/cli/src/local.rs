@@ -3,12 +3,16 @@ use serde_json::Value;
 use uuid::Uuid;
 use uv_core::{PrismMultiplexer, UVLink, UVSchemaDefinition, UVSpectrum};
 
-use crate::{parsing::{cli_args::parse_args_to_map, cli_preprocessor::preprocess}, rendering::cli_renderer::{render_array, render_object, render_stream}};
+use crate::{parsing::{cli_args::parse_args_to_map, cli_preprocessor::preprocess}, rendering::{cli_help::handle_help_request, cli_renderer::{render_array, render_object, render_stream}}};
 
 
 pub fn handle_local(prism: &str, args: Vec<String>) -> Result<()> {
     let (name, namespace) = UVSpectrum::resolve_prism_id(&prism.to_string())?;
     let prism_id = format!("{}:{}", namespace, name);
+
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") || prism == "help" {
+        return handle_help_request(prism, &args);
+    }
 
     // Find the spectrum for the given prism
     let spectrum = UVSpectrum::new(&prism_id)
