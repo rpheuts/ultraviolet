@@ -47,8 +47,6 @@ impl UVLink {
         )
     }
     
-
-    
     /// Send a wavefront to initiate a request.
     ///
     /// This function creates a wavefront with the given ID, prism, frequency, and input data,

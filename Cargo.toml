@@ -3,13 +3,13 @@ resolver = "2"
 members = [ "clients/cli",
     "uv-core",
     "uv-service",
-    "uv-ui",
 
     "clients/cli",
 
     "prisms/aws/curl",
     "prisms/aws/burner",
     "prisms/aws/accounts",
+    "prisms/core/bedrock",
 ]
 
 [workspace.dependencies]

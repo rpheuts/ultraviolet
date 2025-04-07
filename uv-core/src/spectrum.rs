@@ -134,7 +134,7 @@ impl UVSpectrum {
     }
 }
 
-impl UVSchemaDefinition {
+impl UVSchemaDefinition {   
     pub fn validate(&self, value: &Value) -> Result<(), UVError> {
         JSONSchema::compile(&self.schema)
             .map_err(|e| UVError::InvalidInput(format!("Input validation error: {}", e)))?
