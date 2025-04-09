@@ -1,4 +1,10 @@
-# Photon Types Examples
+# [DEPRECATED] Photon Types Examples
+
+> **DEPRECATION NOTICE**: This document refers to an older architecture that has been replaced by the Pulse Protocol. Please see [Pulse Protocol Examples](pulse-examples.md) for current examples and [Pulse Protocol](../specs/pulse-protocol.md) for detailed documentation.
+
+The rest of this document is kept for historical reference only.
+
+---
 
 This document provides practical examples of how the three core photon types are used in different scenarios.
 

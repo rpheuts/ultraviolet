@@ -2,113 +2,64 @@
 
 ## Overview
 
-The spectrum format defines a prism's capabilities, including its available frequencies (methods), their input/output formats, and dependencies on other prisms through refractions. This specification aims to simplify output handling by defining a set of standard photon types and enabling composable, self-contained prisms.
+The spectrum format defines a prism's capabilities, including its available frequencies (methods), their input/output formats, and dependencies on other prisms through refractions. This specification aims to provide a standard way for prisms to declare their interfaces and dependencies.
 
-## Photon Types
+### Pulse Protocol
 
-### Base Photon Types
+The Pulse protocol is the communication backbone of the Ultraviolet system, consisting of four fundamental components:
 
-These are the fundamental photon types that form the foundation of the system:
+1. **Wavefront**: Initial request with frequency and input data
+2. **Photon**: Response data carrier with flexible structure
+3. **Trap**: Completion signal with optional error information
+4. **Extinguish**: Signal to terminate a prism and its refractions
 
-#### 1. Value Photon
-A single value output, useful for simple responses.
+These components enable efficient communication between prisms, with Photons carrying data of any structure as defined by the prism's output schema.
 
-```json
-{
-    "type": "value",
-    "value": "string"  // or "number", "boolean", etc.
-}
-```
+## Schema Definition
 
-Example use cases:
-- Command success/failure status
-- Single computed result
-- Simple text output
-- Default CLI behavior: Direct output to stdout
+The spectrum format uses JSON Schema to define input and output formats:
 
-#### 2. Record Photon
-Key-value pairs representing structured data.
+### Required and Optional Fields
+
+According to JSON Schema standards, properties are optional by default unless explicitly marked as required:
 
 ```json
 {
-    "type": "record",
-    "key_values": [
-        {
-            "key": "id",
-            "value": "string"
-        },
-        {
-            "key": "timestamp",
-            "value": "string"
-        }
-    ]
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "age": {"type": "integer"}
+  },
+  "required": ["name"]
 }
 ```
 
-Example use cases:
-- List operations (ls, ps, etc)
-- Query results
-- Status information
-- Default CLI behavior: Rendered as table with keys as columns
+In this example, `name` is required while `age` is optional.
 
-#### 3. Stream Photon
-A sequence of values, useful for continuous or partial outputs.
+### Handling Optional and Nullable Fields
+
+For fields that might be null or missing, JSON Schema supports an array of types approach:
 
 ```json
-{
-    "type": "stream",
-    "value": "string"  // type of each stream element
+"properties": {
+  "accountName": {"type": "string"},
+  "awsAccountId": {"type": ["string", "null"]}
 }
 ```
 
-Example use cases:
-- Log streaming
-- Real-time updates
-- Large dataset processing
-- Default CLI behavior: Line-by-line output to stdout
+This allows a property to accept either a string or null value, which is useful for fields that might not be available right away (e.g., the account ID being unavailable while an account is still being created).
 
-### Domain-Specific Photon Types
+Remember that in JSON Schema, properties are optional by default unless they're explicitly included in the `required` array.
 
-Beyond the base types, prisms can use domain-specific photon types for clearer semantics:
+### CLI Rendering
 
-#### Web Request Photon
-For HTTP operations:
+The system renders output based on the data structure specified in the spectrum's output schema:
 
-```json
-{
-    "type": "web_request",
-    "method": "string",      // GET, POST, etc.
-    "url": "string",
-    "headers": {             // optional
-        "type": "object",
-        "additionalProperties": { "type": "string" }
-    },
-    "body": {               // optional
-        "type": "object"
-    }
-}
-```
+1. **Arrays**: Rendered as formatted tables with column headers derived from the first object's keys
+2. **Objects**: Currently rendered as pretty-printed JSON (with plans to implement card-based rendering)
+3. **Streams**: For stream data (indicated by `x-uv-stream` extension), outputs content progressively
 
-#### Command Photon
-For system command execution:
-
-```json
-{
-    "type": "command",
-    "command": "string",
-    "args": {
-        "type": "array",
-        "items": { "type": "string" }
-    },
-    "env": {                // optional
-        "type": "object",
-        "additionalProperties": { "type": "string" }
-    },
-    "working_dir": {        // optional
-        "type": "string"
-    }
-}
-```
+This behavior enables intuitive display of different data types in the CLI.
 
 ## Example Manifest
 
@@ -195,7 +146,7 @@ Here's a more complex example with refractions:
           "type": "object",
           "properties": {
             "accountName": {"type": "string"},
-            "awsAccountId": {"type": "string"},
+            "awsAccountId": {"type": ["string", "null"]},
             "status": {"type": "string"},
             "validTill": {"type": "string"},
             "user": {"type": "string"}
@@ -390,7 +341,7 @@ While refractions handle dependencies within prisms, external composition allows
 
 ## CLI Integration
 
-The photon type system enables natural Unix-style composition:
+The CLI integration enables natural Unix-style composition:
 
 ```bash
 # Chain commands with automatic type conversion
@@ -412,16 +363,16 @@ $ uv aws:s3-list | \
 3. **Lazy Loading**: Target prisms are only loaded when needed, improving performance
 4. **Flexible Composition**: Both internal (refractions) and external composition are supported
 5. **Clear Data Flow**: Property mapping makes data flow between prisms explicit and transparent
-6. **Type Safety**: Base photon types ensure consistent communication patterns
+6. **Schema Validation**: JSON Schema ensures data consistency
 7. **CLI Integration**: Natural Unix-style composition with pipes
 
 ## Implementation Notes
 
-1. The core library should provide:
-   - Base photon type definitions
+1. The core library provides:
+   - Pulse protocol implementation (Wavefront, Photon, Trap, Extinguish)
    - Refraction resolution and lazy loading
    - Property mapping utilities
-   - Helper functions for emitting photons
+   - Schema validation
    - External composition support
 
 2. Prisms should:
@@ -435,4 +386,4 @@ $ uv aws:s3-list | \
    - Leverage the CLI for simple pipelines
    - Create custom compositions for complex workflows
 
-See [Typed Photons and Adapters](typed-photons.md) for more details on the photon system.
+See [Pulse Protocol](pulse-protocol.md) for more details on the communication protocol between prisms.
