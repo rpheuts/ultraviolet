@@ -112,116 +112,177 @@ For system command execution:
 
 ## Example Manifest
 
-```json
-{
-    "name": "curl",
-    "version": "1.0.0",
-    "namespace": "aws",
-    "description": "Curl-based HTTP requests with Amazon internal auth",
-    "tags": ["aws", "http"],
-    "dependencies": [],
-    "wavelengths": [
-        {
-            "frequency": "curl.get",
-            "description": "Make a GET request",
-            "input": {
-                "url": "string",
-                "headers": [
-                    {
-                        "name": "string",
-                        "value": "string"
-                    }
-                ],
-                "required": ["url"]
-            },
-            "output": {
-                "status": "number",
-                "body": "string",
-            }
-        },
-        {
-            "frequency": "curl.post",
-            "description": "Make a POST request",
-            "input": {
-                "url": "string",
-                "body": "string",
-                "headers": [
-                    {
-                        "name": "string",
-                        "value": "string"
-                    }
-                ],
-                "required": ["url"]
-            },
-            "output": {
-                "status": "number",
-                "body": "string",
-            }
-        }
-    ]
-}
-```
+Spectrum files follow the JSON Schema format for defining input and output schemas:
 
 ```json
 {
-    "name": "burner",
-    "version": "1.0.0",
-    "namespace": "aws",
-    "description": "Manage AWS Burner accounts",
-    "tags": ["aws", "accounts"],
-    "refractions": [
-        {
-            "name": "http.get",
-            "target": "aws:curl",
-            "frequency": "curl.get",
-            "transpose": {
-                "target.url": "refraction.url",
-            },
-            "reflection": {
-                "refraction.body": "reflection.body" 
-            }
+  "name": "curl",
+  "namespace": "aws",
+  "version": "0.1.0",
+  "description": "Curl-based HTTP requests with Amazon internal auth",
+  "wavelengths": [
+    {
+      "frequency": "get",
+      "description": "Make a GET request",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "headers": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          }
         },
-        {
-            "name": "http.post",
-            "target": "aws:curl",
-            "frequency": "curl.post",
-            "transpose": {
-                "target.url": "refraction.url",
-                "target.body": "refraction.body",
-            },
-            "reflection": {
-                "refraction.body": "reflection.body" 
-            }
+        "required": ["url"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "number"},
+          "body": {"type": "string"}
         },
-    ],
-    "wavelengths": [
-        {
-            "frequency": "list",
-            "description": "List burner accounts",
-            "input": {},
-            "output": [
-                {
-                    "name": "string",
-                    "id": "string",
-                    "status": "string",
-                    "created": "datetime"
-                }
-            ]
+        "required": ["status", "body"]
+      }
+    },
+    {
+      "frequency": "post",
+      "description": "Make a POST request",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string"},
+          "body": {"type": "string"},
+          "method": {"type": "string"},
+          "headers": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          }
         },
-        {
-            "frequency": "create",
-            "description": "List burner accounts",
-            "input": {
-                "name": "string"
-            },
-            "output": {
-                "name": "string",
-                "id": "string",
-                "status": "string",
-                "created": "datetime"
-            }
+        "required": ["url"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "number"},
+          "body": {"type": "string"}
+        },
+        "required": ["status", "body"]
+      }
+    }
+  ]
+}
+```
+
+Here's a more complex example with refractions:
+
+```json
+{
+  "name": "burner",
+  "namespace": "aws",
+  "version": "0.1.0",
+  "description": "Manage burner AWS accounts",
+  "wavelengths": [
+    {
+      "frequency": "list",
+      "description": "List all burner accounts",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "accountName": {"type": "string"},
+            "awsAccountId": {"type": "string"},
+            "status": {"type": "string"},
+            "validTill": {"type": "string"},
+            "user": {"type": "string"}
+          }
         }
-    ]
+      }
+    },
+    {
+      "frequency": "create",
+      "description": "Create a new burner account",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"}
+        },
+        "required": ["name"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"},
+          "details": {"type": "object"}
+        },
+        "required": ["success", "message"]
+      }
+    }
+  ],
+  "refractions": [
+    {
+      "name": "curl.get",
+      "target": "aws:curl",
+      "frequency": "get",
+      "transpose": {
+        "url": "url",
+        "headers": "headers?"
+      },
+      "reflection": {
+        "status": "status",
+        "body": "body"
+      }
+    },
+    {
+      "name": "curl.post",
+      "target": "aws:curl",
+      "frequency": "post",
+      "transpose": {
+        "url": "url",
+        "body": "body?",
+        "method": "method?",
+        "headers": "headers?"
+      },
+      "reflection": {
+        "status": "status",
+        "body": "body"
+      }
+    }
+  ]
+}
+```
+
+### Special Schema Extensions
+
+The spectrum format supports some special extensions to JSON Schema:
+
+#### Streaming Output
+
+For streaming responses, you can use the `x-uv-stream` extension:
+
+```json
+{
+  "frequency": "stream_logs",
+  "description": "Stream log entries",
+  "input": {
+    "type": "object",
+    "properties": {
+      "source": {"type": "string"}
+    }
+  },
+  "output": {
+    "type": "object",
+    "properties": {
+      "line": {"type": "string"},
+      "timestamp": {"type": "string"}
+    },
+    "x-uv-stream": "text"  // Indicates this is a stream output
+  }
 }
 ```
 
@@ -233,14 +294,16 @@ Refractions are a mechanism for prisms to declare dependencies on other prisms a
 
 ```json
 {
-    "name": "http.get",           // Local name for the refraction
+    "name": "curl.get",           // Local name for the refraction
     "target": "aws:curl",         // Target prism in namespace:name format
-    "frequency": "curl.get",      // Frequency to call on the target prism
-    "transpose": {                // Input mapping (from refraction to target)
-        "target.url": "refraction.url"
+    "frequency": "get",           // Frequency to call on the target prism
+    "transpose": {                // Input mapping (local to target properties)
+        "url": "url",             // Map local url to target url
+        "headers": "headers?"     // Optional property mapping (? indicates optional)
     },
-    "reflection": {               // Output mapping (from target to refraction)
-        "refraction.body": "reflection.body"
+    "reflection": {               // Output mapping (target to local properties)
+        "status": "status",       // Map target status to local status
+        "body": "body"            // Map target body to local body
     }
 }
 ```

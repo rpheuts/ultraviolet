@@ -10,6 +10,7 @@ members = [ "clients/cli",
     "prisms/aws/ada",
     "prisms/aws/burner",
     "prisms/aws/accounts",
+    "prisms/aws/governance",
     "prisms/core/bedrock",
 ]
 

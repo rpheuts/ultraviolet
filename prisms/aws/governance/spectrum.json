@@ -1,0 +1,102 @@
+{
+  "name": "governance",
+  "namespace": "aws",
+  "version": "0.1.0",
+  "description": "AWS Governance management",
+  "wavelengths": [
+    {
+      "frequency": "tickets.list",
+      "description": "List governance tickets",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+            "cti": {"type": "string"},
+            "widgetGroup": {"type": "string"},
+            "campaign": {"type": "string"},
+            "marketplaceId": {"type": "string"},
+            "lowCtrFlag": {"type": "string"},
+            "ticketId": {"type": "string"},
+            "status": {"type": "string"},
+            "lastUpdated": {"type": "string"},
+            "displayTicket": {"type": "string"},
+            "ticketUrl": {"type": "string"}
+            }
+        },
+        "required": ["tickets"]
+      }
+    },
+    {
+      "frequency": "performers.list",
+      "description": "List governance performers",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+            "cti": {"type": "string"},
+            "widgetGroup": {"type": "string"},
+            "campaign": {"type": "string"},
+            "marketplaceId": {"type": "string"},
+            "lowCtrFlag": {"type": "string"},
+            "serverCtr": {"type": "string"}
+            }
+        },
+        "required": ["performers"]
+      }
+    },
+    {
+      "frequency": "report",
+      "description": "Generate governance report",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "report": {"type": "string", "description": "HTML report content"}
+        },
+        "x-uv-stream": "html"
+      }
+    }
+  ],
+  "refractions": [
+    {
+      "name": "curl.get",
+      "target": "aws:curl",
+      "frequency": "get",
+      "transpose": {
+        "url": "url",
+        "headers": "headers?"
+      },
+      "reflection": {
+        "status": "status",
+        "body": "body"
+      }
+    },
+    {
+      "name": "curl.post",
+      "target": "aws:curl",
+      "frequency": "post",
+      "transpose": {
+        "url": "url",
+        "body": "body?",
+        "headers": "headers?"
+      },
+      "reflection": {
+        "status": "status",
+        "body": "body"
+      }
+    }
+  ]
+}

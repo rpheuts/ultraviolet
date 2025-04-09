@@ -6,7 +6,16 @@ pub fn match_cli_input() -> Result<ArgMatches> {
         .about("Ultra-Violet CLI")
         .version("1.0.0")
         .subcommand_required(true)
-        .arg_required_else_help(true)
+        .disable_help_flag(true)  // Disable built-in help
+        .disable_help_subcommand(true)  // Disable built-in help subcommand
+        .arg(
+            Arg::new("help")
+                .short('h')
+                .long("help")
+                .help("Show help information")
+                .action(ArgAction::SetTrue)
+                .global(true)
+        )
         .arg(
             Arg::new("debug")
                 .short('d')
