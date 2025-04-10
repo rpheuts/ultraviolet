@@ -1,0 +1,46 @@
+{
+  "name": "cdk",
+  "namespace": "aws",
+  "version": "0.1.0",
+  "description": "AWS CDK utilities for resource management",
+  "wavelengths": [
+    {
+      "frequency": "resources",
+      "description": "List all AWS resources in a CDK output directory",
+      "input": {
+        "type": "object",
+        "properties": {
+          "cdk_out_path": {
+            "type": "string",
+            "description": "Path to the cdk.out directory containing CloudFormation templates"
+          },
+          "stack": {
+            "type": "string",
+            "description": "Optional stack name to filter resources by"
+          },
+          "check_status": {
+            "type": "boolean",
+            "description": "Check if resources currently exist in AWS"
+          },
+          "region": {
+            "type": "string",
+            "description": "AWS region to check status in (defaults to us-east-1)"
+          }
+        },
+        "required": ["cdk_out_path"]
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "logical_id": {"type": "string"},
+            "resource_type": {"type": "string"}, 
+            "stack": {"type": "string"},
+            "status": {"type": "string"}
+          }
+        }
+      }
+    }
+  ]
+}

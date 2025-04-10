@@ -49,7 +49,7 @@ impl BedrockPrism {
             spectrum: None,
             runtime,
             client,
-        })
+        })  
     }
 
     /// Build a prompt with optional file context

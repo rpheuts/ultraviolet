@@ -1,0 +1,19 @@
+[package]
+name = "uv_prism_aws_cdk"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+uv-core = { path = "../../../uv-core" }
+uuid = { version = "1.4", features = ["v4", "serde"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"  # For YAML CloudFormation templates
+log = "0.4"
+glob = "0.3"  # For finding template files in cdk.out
+tokio = { version = "1.28", features = ["full"] }
+aws-config = "1.6.1"
+aws-sdk-cloudformation = "1.71.0"

@@ -24,9 +24,18 @@ pub fn match_cli_input() -> Result<ArgMatches> {
                 .action(ArgAction::SetTrue)
                 
         )
+        .arg(
+            Arg::new("output")
+                .short('o')
+                .long("output")
+                .help("Set the output format (raw, pretty)")
+                .default_value("pretty")
+                .action(ArgAction::Set)
+                
+        )
         .subcommand(
             Command::new("server")
-            .short_flag('S')
+            .short_flag('s')
             .long_flag("server")
             .about("Run Ultra-Violet in server mode")
             .arg(

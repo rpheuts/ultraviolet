@@ -21,6 +21,7 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args = match_cli_input()?;
     let debug = args.get_flag("debug");
+    let output = args.get_one::<String>("output");
 
     init_tracing(debug);
 
@@ -39,7 +40,7 @@ async fn main() -> Result<()> {
                 .filter_map(|s| s.to_str().map(|s| s.to_string()))
                 .collect();
 
-            handle_local(external, args)?;
+            handle_local(external, args, output)?;
         }
         _ => unreachable!()
     }

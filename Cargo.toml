@@ -9,9 +9,10 @@ members = [ "clients/cli",
     "prisms/aws/curl",
     "prisms/aws/ada",
     "prisms/aws/burner",
+    "prisms/aws/cdk",
     "prisms/aws/accounts",
     "prisms/aws/governance",
-    "prisms/core/bedrock",
+    "prisms/core/bedrock"
 ]
 
 [workspace.dependencies]

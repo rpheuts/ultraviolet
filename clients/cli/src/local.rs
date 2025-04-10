@@ -6,7 +6,7 @@ use uv_core::{PrismMultiplexer, UVLink, UVSchemaDefinition, UVSpectrum};
 use crate::{parsing::{cli_args::parse_args_to_map, cli_preprocessor::preprocess}, rendering::{cli_help::handle_help_request, cli_renderer::{render_array, render_object, render_stream}}};
 
 
-pub fn handle_local(prism: &str, args: Vec<String>) -> Result<()> {
+pub fn handle_local(prism: &str, args: Vec<String>, output: Option<&String>) -> Result<()> {
     let (name, namespace) = UVSpectrum::resolve_prism_id(&prism.to_string())?;
     let prism_id = format!("{}:{}", namespace, name);
 
@@ -37,7 +37,7 @@ pub fn handle_local(prism: &str, args: Vec<String>) -> Result<()> {
     let link = send_wavefront(&prism_id, &frequency, input)?;
 
     // Process the response
-    process_response(link, &wavelength.output)
+    process_response(link, &wavelength.output, output)
 }
 
 fn send_wavefront(prism_id: &String, frequency: &str, input: Value) -> Result<UVLink> {
@@ -52,7 +52,7 @@ fn send_wavefront(prism_id: &String, frequency: &str, input: Value) -> Result<UV
     Ok(link)
 }
 
-fn process_response(link: UVLink, output_schema: &UVSchemaDefinition) -> Result<()> {
+fn process_response(link: UVLink, output_schema: &UVSchemaDefinition, output: Option<&String>) -> Result<()> {
     // see if we're dealing with a stream
     if let Some(stream_type) = output_schema.schema.get("x-uv-stream") {
         return process_stream(stream_type.to_string(), link, output_schema)
@@ -65,8 +65,8 @@ fn process_response(link: UVLink, output_schema: &UVSchemaDefinition) -> Result<
         .get("type")
         .unwrap()
         .as_str() {
-            Some("array") => render_array(&value, output_schema),
-            Some("object") => render_object(&value, output_schema),
+            Some("array") => render_array(&value, output_schema, output),
+            Some("object") => render_object(&value, output_schema, output),
             Some(_) => todo!(),
             None => todo!(),
         }
