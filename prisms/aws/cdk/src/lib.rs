@@ -4,6 +4,8 @@
 //! such as listing resources from CloudFormation templates.
 
 pub mod spectrum;
+pub mod aws;
+pub mod resources;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,7 +18,8 @@ use uv_core::{
     Result, UVError, UVLink, UVPrism, UVPulse, UVSpectrum
 };
 
-use crate::spectrum::{ResourcesInput, CdkResource, CloudFormationTemplate, CdkManifest};
+use crate::spectrum::{ResourcesInput, CleanupInput, CleanupResult, CdkResource, CloudFormationTemplate, CdkManifest};
+use crate::resources::{ResourceHandler, get_handler, StatusFilter, COMMON_RESOURCE_TYPES};
 
 /// Resource information containing status and physical ID
 #[derive(Debug, Clone)]
@@ -247,6 +250,200 @@ impl CDKPrism {
         
         Ok(())
     }
+
+    /// Handle cleanup of resources based on filter criteria
+    fn handle_cleanup(&self, id: Uuid, input: CleanupInput, link: &UVLink) -> Result<()> {
+        let cdk_out_path = Path::new(&input.cdk_out_path);
+        
+        // Ensure the cdk.out directory exists
+        if !cdk_out_path.exists() || !cdk_out_path.is_dir() {
+            return Err(UVError::InvalidInput(format!(
+                "CDK output directory not found at path: {}", input.cdk_out_path
+            )));
+        }
+        
+        // Extract stack names from manifest.json
+        let stack_mappings = self.extract_stack_names(cdk_out_path)?;
+        
+        // Find all CloudFormation template files
+        let pattern = format!("{}/*.template.json", cdk_out_path.display());
+        let template_paths = glob(&pattern)
+            .map_err(|e| UVError::Other(format!("Failed to search for templates: {}", e)))?;
+        
+        // Prepare filter criteria
+        let dry_run = input.dry_run.unwrap_or(true);
+        let region = input.region.clone();
+        
+        // Parse status filter
+        let status_filter = match input.status_filter.as_deref() {
+            Some("DELETE_FAILED") => StatusFilter::DeleteFailed,
+            Some("ALL") => StatusFilter::All,
+            _ => StatusFilter::DeleteSkipped,
+        };
+        
+        // Get optional resource type filter
+        let resource_types = input.resource_types.unwrap_or_else(|| {
+            // Default to common resource types
+            COMMON_RESOURCE_TYPES.iter().map(|s| s.to_string()).collect()
+        });
+        
+        // Collect resources to cleanup
+        let mut resources_to_cleanup = Vec::new();
+        
+        // Process each template file
+        let mut found_templates = false;
+        for path_result in template_paths {
+            let path = path_result
+                .map_err(|e| UVError::Other(format!("Error reading template path: {}", e)))?;
+            
+            // Get the template filename
+            let template_filename = path.file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or_default();
+            
+            // Extract stack name from filename and mapping
+            let template_basename = path.file_stem()
+                .and_then(|stem| stem.to_str())
+                .map(|stem| stem.replace(".template", ""))
+                .unwrap_or_else(|| "unknown".to_string());
+                
+            let stack_name = stack_mappings.get(template_filename)
+                .cloned()
+                .unwrap_or(template_basename);
+            
+            // If stack filter is provided, skip non-matching stacks
+            if let Some(ref stack_filter) = input.stack {
+                if !stack_name.contains(stack_filter) {
+                    continue;
+                }
+            }
+            
+            found_templates = true;
+            
+            // Get resource statuses for this stack
+            let resource_statuses = match self.runtime.block_on(async {
+                self.get_stack_resources(&stack_name, region.as_deref().unwrap_or("us-east-1")).await
+            }) {
+                Ok(statuses) => Some(statuses),
+                Err(e) => {
+                    log::warn!("Failed to get resource statuses for stack {}: {}", stack_name, e);
+                    None
+                }
+            };
+            
+            // Filter and collect resources for cleanup
+            self.collect_resources_for_cleanup(
+                &path, 
+                &stack_name, 
+                resource_statuses.as_ref(),
+                &resource_types,
+                &status_filter,
+                &mut resources_to_cleanup
+            )?;
+        }
+        
+        if !found_templates {
+            return Err(UVError::InvalidInput(format!(
+                "No CloudFormation templates found in directory: {}", input.cdk_out_path
+            )));
+        }
+        
+        // Process each resource for cleanup
+        for (logical_id, stack_name, resource_type, physical_id, status) in resources_to_cleanup {
+            let result = if let Some(handler) = get_handler(&resource_type) {
+                if let Some(physical_id) = &physical_id {
+                    // Execute cleanup
+                    match self.runtime.block_on(async {
+                        handler.delete_resource(physical_id, region.as_deref(), dry_run).await
+                    }) {
+                        Ok(cleanup_status) => {
+                            cleanup_status.to_string()
+                        },
+                        Err(e) => {
+                            format!("ERROR: {}", e)
+                        }
+                    }
+                } else {
+                    "SKIPPED: No physical ID available".to_string()
+                }
+            } else {
+                format!("SKIPPED: No handler for resource type {}", resource_type)
+            };
+            
+            // Create and emit cleanup result
+            let cleanup_result = CleanupResult {
+                logical_id,
+                resource_type,
+                stack: stack_name,
+                status,
+                physical_id,
+                cleanup_result: result,
+            };
+            
+            // Emit the result
+            link.emit_photon(id, serde_json::to_value(cleanup_result)?)?;
+        }
+        
+        // Signal successful completion
+        link.emit_trap(id, None)?;
+        
+        Ok(())
+    }
+    
+    /// Collect resources that match the cleanup filters
+    fn collect_resources_for_cleanup(
+        &self,
+        path: &PathBuf,
+        stack_name: &str,
+        resource_statuses: Option<&HashMap<String, ResourceInfo>>,
+        resource_types: &[String],
+        status_filter: &StatusFilter,
+        resources_to_cleanup: &mut Vec<(String, String, String, Option<String>, Option<String>)>
+    ) -> Result<()> {
+        // Read and parse the template file
+        let content = fs::read_to_string(path)
+            .map_err(|e| UVError::Other(format!("Failed to read template file {}: {}", path.display(), e)))?;
+            
+        let template: CloudFormationTemplate = serde_json::from_str(&content)
+            .map_err(|e| UVError::Other(format!("Failed to parse template file {}: {}", path.display(), e)))?;
+        
+        // Extract resources from the template
+        if let Some(resources) = template.resources {
+            for (logical_id, resource) in resources {
+                // Skip if resource type doesn't match filter
+                if !resource_types.iter().any(|t| *t == resource.resource_type) {
+                    continue;
+                }
+                
+                // Get status and physical ID if available
+                let (status, physical_id) = if let Some(statuses) = resource_statuses {
+                    if let Some(info) = statuses.get(&logical_id) {
+                        (Some(info.status.clone()), info.physical_id.clone())
+                    } else {
+                        (None, None)
+                    }
+                } else {
+                    (None, None)
+                };
+                
+                // Check if the resource matches the status filter
+                if !status_filter.matches(status.as_deref()) {
+                    continue;
+                }
+                
+                // Add to cleanup list
+                resources_to_cleanup.push((
+                    logical_id,
+                    stack_name.to_string(),
+                    resource.resource_type,
+                    physical_id,
+                    status,
+                ));
+            }
+        }
+        
+        Ok(())
+    }
 }
 
 impl UVPrism for CDKPrism {
@@ -254,7 +451,7 @@ impl UVPrism for CDKPrism {
         self.spectrum = Some(spectrum);
         Ok(())
     }
-    
+
     fn handle_pulse(&self, id: Uuid, pulse: &UVPulse, link: &UVLink) -> Result<bool> {
         if let UVPulse::Wavefront(wavefront) = pulse {
             match wavefront.frequency.as_str() {
@@ -264,6 +461,14 @@ impl UVPrism for CDKPrism {
                     
                     // Handle the resources request
                     self.handle_resources(id, input, link)?;
+                    return Ok(true);
+                },
+                "cleanup" => {
+                    // Deserialize the input
+                    let input: CleanupInput = serde_json::from_value(wavefront.input.clone())?;
+                    
+                    // Handle the cleanup request
+                    self.handle_cleanup(id, input, link)?;
                     return Ok(true);
                 },
                 _ => {

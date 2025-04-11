@@ -10,6 +10,28 @@ pub struct ResourcesInput {
     pub region: Option<String>,
 }
 
+/// Input parameters for the cleanup frequency
+#[derive(Debug, Deserialize)]
+pub struct CleanupInput {
+    pub cdk_out_path: String,
+    pub stack: Option<String>,
+    pub resource_types: Option<Vec<String>>,
+    pub status_filter: Option<String>,
+    pub region: Option<String>,
+    pub dry_run: Option<bool>,
+}
+
+/// Result of a resource cleanup operation
+#[derive(Debug, Serialize)]
+pub struct CleanupResult {
+    pub logical_id: String,
+    pub stack: String,
+    pub physical_id: Option<String>,
+    pub resource_type: String,
+    pub status: Option<String>,
+    pub cleanup_result: String,
+}
+
 /// A resource extracted from a CloudFormation template
 #[derive(Debug, Serialize)]
 pub struct CdkResource {

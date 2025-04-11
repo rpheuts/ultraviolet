@@ -41,6 +41,55 @@
           }
         }
       }
+    },
+    {
+      "frequency": "cleanup",
+      "description": "Clean up orphaned resources from failed CDK deployments",
+      "input": {
+        "type": "object",
+        "properties": {
+          "cdk_out_path": {
+            "type": "string",
+            "description": "Path to the cdk.out directory containing CloudFormation templates"
+          },
+          "stack": {
+            "type": "string",
+            "description": "Optional stack name to filter resources by"
+          },
+          "resource_types": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Resource types to clean up (e.g. [\"AWS::S3::Bucket\", \"AWS::IAM::Role\"])"
+          },
+          "status_filter": {
+            "type": "string", 
+            "enum": ["DELETE_FAILED", "DELETE_SKIPPED", "ALL"],
+            "default": "DELETE_SKIPPED"
+          },
+          "region": {
+            "type": "string",
+            "description": "AWS region (defaults to us-east-1)"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": ["cdk_out_path"]
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "logical_id": {"type": "string"},
+            "physical_id": {"type": "string"},
+            "resource_type": {"type": "string"},
+            "status": {"type": "string"},
+            "cleanup_result": {"type": "string"}
+          }
+        }
+      }
     }
   ]
 }
