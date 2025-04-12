@@ -7,7 +7,8 @@ use std::sync::Arc;
 use axum::{extract::ws::{Message, WebSocket, WebSocketUpgrade}, routing::get, Router};
 use futures::StreamExt;
 use tokio::sync::Mutex;
-use tracing::{info, error, debug};
+use tracing::{info, error, debug, warn};
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{request_handler::UVRequestHandler, LogLevel, Result, ServiceError, ServiceOptions};
 
@@ -42,9 +43,27 @@ impl UVServer {
         }
         
         // Build the router
-        let app = Router::new()
+        let mut app = Router::new()
             // WebSocket handler
             .route("/ws", get(async move |ws: WebSocketUpgrade| {ws.on_upgrade(async move |socket| server.handle_socket(socket).await)}));
+        
+        // Add static file serving if enabled
+        if options.serve_static {
+            if let Some(static_dir) = &options.static_dir {
+                info!("Serving static files from: {}", static_dir.display());
+                
+                // Serve static files at the root path
+                app = app.nest_service(
+                    "/",
+                    ServeDir::new(static_dir)
+                        .fallback(ServeFile::new(
+                            static_dir.join("index.html")
+                        ))
+                );
+            } else {
+                warn!("Static file serving enabled but no directory specified");
+            }
+        }
         
         // Start the server
         info!("Starting UV Service on {}", options.bind_address);
@@ -92,4 +111,3 @@ impl UVServer {
         info!("WebSocket connection terminated");
     }
 }
-

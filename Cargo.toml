@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [ "clients/cli",
+members = [
     "uv-core",
     "uv-service",
 
@@ -12,7 +12,8 @@ members = [ "clients/cli",
     "prisms/aws/cdk",
     "prisms/aws/accounts",
     "prisms/aws/governance",
-    "prisms/core/bedrock"
+    "prisms/core/bedrock",
+    "prisms/system/discovery"
 ]
 
 [workspace.dependencies]

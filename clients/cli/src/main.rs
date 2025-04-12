@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
                 .get_one::<String>("address")
                 .expect("No address and port specified");
 
-            handle_server(bind_address.parse()?, debug).await?;
+            handle_server(bind_address.parse()?, sync_matches.get_flag("static"), debug).await?;
         },
         Some((external, sub_m)) => {
             let args: Vec<String> = sub_m

@@ -5,7 +5,6 @@ use uv_core::{PrismMultiplexer, UVLink, UVSchemaDefinition, UVSpectrum};
 
 use crate::{parsing::{cli_args::parse_args_to_map, cli_preprocessor::preprocess}, rendering::{cli_help::handle_help_request, cli_renderer::{render_array, render_object, render_stream}}};
 
-
 pub fn handle_local(prism: &str, args: Vec<String>, output: Option<&String>) -> Result<()> {
     let (name, namespace) = UVSpectrum::resolve_prism_id(&prism.to_string())?;
     let prism_id = format!("{}:{}", namespace, name);

@@ -47,6 +47,12 @@ pub fn match_cli_input() -> Result<ArgMatches> {
                     .default_value("127.0.0.1:3000")
                     .num_args(1),
             )
+            .arg(
+                Arg::new("static")
+                    .long("no_static")
+                    .help("Don't host the static files")
+                    .action(ArgAction::SetFalse)
+            )
         )
         .allow_external_subcommands(true)
         .get_matches())

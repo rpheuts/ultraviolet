@@ -1,0 +1,84 @@
+{
+  "name": "discovery",
+  "namespace": "system",
+  "version": "0.1.0",
+  "description": "Discover and inspect prisms in the system",
+  "wavelengths": [
+    {
+      "frequency": "list",
+      "description": "List all available prisms",
+      "input": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Optional filter pattern for prism names"
+          }
+        }
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "namespace": {"type": "string"},
+            "name": {"type": "string"}
+          },
+          "required": ["namespace", "name"]
+        }
+      }
+    },
+    {
+      "frequency": "describe",
+      "description": "Get the spectrum for a specific prism",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prismId": {
+            "type": "string",
+            "description": "Prism ID in namespace:name format"
+          }
+        },
+        "required": ["prismId"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "namespace": {"type": "string"},
+          "version": {"type": "string"},
+          "description": {"type": "string"},
+          "tags": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "wavelengths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "frequency": {"type": "string"},
+                "description": {"type": "string"},
+                "input": {"type": "object"},
+                "output": {"type": "object"}
+              }
+            }
+          },
+          "refractions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "target": {"type": "string"},
+                "frequency": {"type": "string"},
+                "transpose": {"type": "object"},
+                "reflection": {"type": "object"}
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

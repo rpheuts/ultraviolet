@@ -15,6 +15,21 @@ use server::UVServer;
 use thiserror::Error;
 use uv_core::UVError;
 
+/// Get the default assets directory path (~/.uv/assets)
+pub fn get_default_assets_dir() -> PathBuf {
+    let mut path = dirs::home_dir().unwrap_or_default();
+    path.push(".uv");
+    path.push("assets");
+    path
+}
+
+/// Get the web assets directory path (~/.uv/assets/web)
+pub fn get_web_assets_dir() -> PathBuf {
+    let mut path = get_default_assets_dir();
+    path.push("web");
+    path
+}
+
 /// Error type for UV Service operations
 #[derive(Debug, Error)]
 pub enum ServiceError {
@@ -89,8 +104,8 @@ impl Default for ServiceOptions {
             enable_tls: false,
             cert_path: None,
             key_path: None,
-            serve_static: false,
-            static_dir: None,
+            serve_static: true,  // Enable by default
+            static_dir: Some(get_web_assets_dir()),  // Use default web assets dir
             init_tracing: true,
             log_level: LogLevel::Normal,
         }
