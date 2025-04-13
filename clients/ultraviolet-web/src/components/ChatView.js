@@ -16,6 +16,11 @@ import {
 import SendIcon from '@mui/icons-material/Send';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import FileContextPanel from './FileContextPanel';
 import ChatService from '../services/ChatService';
 
@@ -126,6 +131,120 @@ function ChatView({ connectionManager }) {
     setError(null);
   };
   
+  // Code block component with copy button
+  const CodeBlock = ({ language, value }) => {
+    const codeRef = useRef(null);
+    const [copied, setCopied] = useState(false);
+    
+    // Handle copy to clipboard
+    const handleCopy = () => {
+      if (codeRef.current) {
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    };
+    
+    return (
+      <Box 
+        sx={{ 
+          my: 1,
+          position: 'relative',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: '4px',
+          '&:hover .copy-button': {
+            opacity: 1
+          }
+        }}
+      >
+        <Tooltip title={copied ? "Copied!" : "Copy code"}>
+          <IconButton
+            className="copy-button"
+            size="small"
+            onClick={handleCopy}
+            sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              opacity: 0,
+              transition: 'opacity 0.2s',
+              bgcolor: 'rgba(0, 0, 0, 0.3)',
+              color: 'white',
+              '&:hover': {
+                bgcolor: 'rgba(0, 0, 0, 0.5)'
+              },
+              zIndex: 1
+            }}
+          >
+            {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+          </IconButton>
+        </Tooltip>
+        <SyntaxHighlighter
+          ref={codeRef}
+          style={vscDarkPlus}
+          language={language}
+          wrapLines={true}
+          customStyle={{
+            borderRadius: '3px',
+            margin: 0,
+            fontSize: '0.85rem',
+          }}
+        >
+          {value}
+        </SyntaxHighlighter>
+      </Box>
+    );
+  };
+  
+  // Custom components for markdown rendering
+  const MarkdownComponents = {
+    // Custom renderer for code blocks
+    code: ({node, inline, className, children, ...props}) => {
+      const match = /language-(\w+)/.exec(className || '');
+      const language = match ? match[1] : '';
+      const value = String(children).replace(/\n$/, '');
+      
+      return !inline && match ? (
+        <CodeBlock language={language} value={value} />
+      ) : (
+        <code className={className} {...props} style={{ 
+          backgroundColor: 'rgba(255, 255, 255, 0.1)', 
+          borderRadius: '3px', 
+          padding: '0.2em 0.4em',
+          fontSize: '85%'
+        }}>
+          {children}
+        </code>
+      );
+    },
+    // Custom styling for other markdown elements
+    p: ({children}) => <Typography variant="body1" sx={{ my: 1 }}>{children}</Typography>,
+    h1: ({children}) => <Typography variant="h5" sx={{ mt: 2, mb: 1 }}>{children}</Typography>,
+    h2: ({children}) => <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>{children}</Typography>,
+    h3: ({children}) => <Typography variant="subtitle1" sx={{ mt: 1.5, mb: 0.75, fontWeight: 'bold' }}>{children}</Typography>,
+    h4: ({children}) => <Typography variant="subtitle2" sx={{ mt: 1.5, mb: 0.75, fontWeight: 'bold' }}>{children}</Typography>,
+    ul: ({children}) => <Box component="ul" sx={{ pl: 2, my: 1 }}>{children}</Box>,
+    ol: ({children}) => <Box component="ol" sx={{ pl: 2, my: 1 }}>{children}</Box>,
+    li: ({children}) => <Box component="li" sx={{ my: 0.5 }}>{children}</Box>,
+    blockquote: ({children}) => (
+      <Box 
+        component="blockquote" 
+        sx={{ 
+          borderLeft: '4px solid', 
+          borderColor: 'primary.main',
+          pl: 2, 
+          py: 0.5,
+          my: 1,
+          bgcolor: 'rgba(144, 202, 249, 0.08)',
+          borderRadius: '2px'
+        }}
+      >
+        {children}
+      </Box>
+    ),
+  };
+  
   // Render a message bubble
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
@@ -151,9 +270,15 @@ function ChatView({ connectionManager }) {
             borderTopLeftRadius: isUser ? 2 : 0
           }}
         >
-          <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-            {message.content}
-          </Typography>
+          {isUser ? (
+            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+              {message.content}
+            </Typography>
+          ) : (
+            <ReactMarkdown components={MarkdownComponents}>
+              {message.content}
+            </ReactMarkdown>
+          )}
         </Paper>
       </Box>
     );
