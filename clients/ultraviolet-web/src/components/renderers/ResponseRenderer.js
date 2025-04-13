@@ -10,10 +10,9 @@ import StreamRenderer from './StreamRenderer';
  */
 const ResponseRenderer = ({ data, schema }) => {
   // Check if this is a streaming response
-  const isStreaming = schema && schema['x-uv-stream'];
+  const isStreaming = schema && schema['x-uv-stream'] && Array.isArray(data);
   
   // Use StreamRenderer for streaming responses
-  console.log(JSON.stringify(schema));
   if (isStreaming) {
     return <StreamRenderer data={data} schema={schema} />;
   }
@@ -56,7 +55,7 @@ const ResponseRenderer = ({ data, schema }) => {
           <table style={{ 
             width: '100%', 
             borderCollapse: 'collapse',
-            border: '1px solid #ddd'
+            border: '1px solid rgba(255, 255, 255, 0.12)'
           }}>
             <thead>
               <tr>
@@ -64,8 +63,8 @@ const ResponseRenderer = ({ data, schema }) => {
                   <th key={header} style={{ 
                     padding: '12px', 
                     textAlign: 'left',
-                    borderBottom: '2px solid #ddd',
-                    backgroundColor: '#f5f5f5'
+                    borderBottom: '2px solid rgba(255, 255, 255, 0.12)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)'
                   }}>
                     {header}
                   </th>
@@ -75,12 +74,12 @@ const ResponseRenderer = ({ data, schema }) => {
             <tbody>
               {data.map((item, rowIndex) => (
                 <tr key={rowIndex} style={{
-                  backgroundColor: rowIndex % 2 === 0 ? 'white' : '#f9f9f9'
+                  backgroundColor: rowIndex % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.03)'
                 }}>
                   {headers.map(header => (
                     <td key={`${rowIndex}-${header}`} style={{ 
                       padding: '8px', 
-                      borderBottom: '1px solid #ddd'
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.12)'
                     }}>
                       {renderCellValue(item[header])}
                     </td>
@@ -106,7 +105,7 @@ const ResponseRenderer = ({ data, schema }) => {
             key={index}
             sx={{
               padding: '8px',
-              borderBottom: '1px solid #ddd',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
               '&:last-child': {
                 borderBottom: 'none'
               }
@@ -132,7 +131,7 @@ const ResponseRenderer = ({ data, schema }) => {
           <React.Fragment key={key}>
             <Box component="dt" sx={{ 
               fontWeight: 'bold',
-              color: '#555'
+              color: 'text.secondary'
             }}>
               {key}:
             </Box>

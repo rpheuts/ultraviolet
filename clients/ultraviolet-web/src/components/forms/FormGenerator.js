@@ -127,37 +127,25 @@ const FormGenerator = ({
   
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
-      <Paper sx={{ padding: 3, marginBottom: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          {wavelength.frequency}
-        </Typography>
-        
-        {wavelength.description && (
-          <Typography variant="body2" color="text.secondary" paragraph>
-            {wavelength.description}
-          </Typography>
-        )}
-        
-        {error && (
-          <Alert severity="error" sx={{ marginBottom: 2 }}>
-            {error}
-          </Alert>
-        )}
-        
-        {renderFormFields()}
-        
-        <Box sx={{ marginTop: 3, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Send />}
-            disabled={loading}
-          >
-            {loading ? 'Sending...' : 'Submit'}
-          </Button>
-        </Box>
-      </Paper>
+      {error && (
+        <Alert severity="error" sx={{ marginBottom: 2 }}>
+          {error}
+        </Alert>
+      )}
+      
+      {renderFormFields()}
+      
+      <Box sx={{ marginTop: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Send />}
+          disabled={loading}
+        >
+          {loading ? 'Sending...' : 'Submit'}
+        </Button>
+      </Box>
     </Box>
   );
 };

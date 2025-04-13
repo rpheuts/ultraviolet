@@ -62,8 +62,10 @@ const StreamRenderer = ({ data, schema }) => {
         height: '400px',
         maxHeight: '400px',
         overflow: 'auto',
-        backgroundColor: '#f5f5f5',
+        backgroundColor: 'background.paper',
         borderRadius: '4px',
+        border: '1px solid',
+        borderColor: 'divider',
       }}
     >
       {accumulatedText || (

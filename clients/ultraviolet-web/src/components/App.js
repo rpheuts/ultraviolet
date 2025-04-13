@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { Box, Button, ThemeProvider, createTheme, CssBaseline, Typography } from '@mui/material';
 import Navigation from './Navigation';
 import PrismExplorer from './PrismExplorer';
 import StatusBar from './StatusBar';
@@ -7,14 +7,19 @@ import ConnectionManager from '../services/ConnectionManager';
 import PrismDiscovery from '../services/PrismDiscovery';
 import '../App.css';
 
-// Create a theme
+// Create a dark theme
 const theme = createTheme({
   palette: {
+    mode: 'dark',
     primary: {
-      main: '#2196f3', // Blue
+      main: '#90caf9', // Lighter blue for dark mode
     },
     secondary: {
-      main: '#ff9800', // Orange
+      main: '#ffb74d', // Lighter orange for dark mode
+    },
+    background: {
+      default: '#121212',
+      paper: '#1e1e1e',
     },
   },
   typography: {
@@ -30,6 +35,15 @@ const theme = createTheme({
       '"Helvetica Neue"',
       'sans-serif',
     ].join(','),
+  },
+  components: {
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+        },
+      },
+    },
   },
 });
 
@@ -124,13 +138,31 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <div className="app">
-        <header className="app-header">
-          <h1>Ultraviolet Web Client</h1>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          height: '100vh'
+        }}
+      >
+        <Box 
+          component="header" 
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            p: 2, 
+            bgcolor: 'background.paper', 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            boxShadow: 1
+          }}
+        >
+          <Typography variant="h5">Ultraviolet Web Client</Typography>
           <StatusBar connected={connected} />
-        </header>
+        </Box>
         
-        <div className="app-content">
+        <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <Navigation 
             prisms={prisms} 
             loading={loading}
@@ -139,25 +171,54 @@ function App() {
             connected={connected}
           />
           
-          <PrismExplorer 
-            prismId={selectedPrism}
-            prismDiscovery={prismDiscoveryRef.current}
-            connectionManager={connectionManagerRef.current}
-          />
-        </div>
+          <Box sx={{ flex: 1, overflow: 'auto' }}>
+            <PrismExplorer 
+              prismId={selectedPrism}
+              prismDiscovery={prismDiscoveryRef.current}
+              connectionManager={connectionManagerRef.current}
+            />
+          </Box>
+        </Box>
         
         {error && (
-          <div className="error-message">
-            {error}
-            <div className="error-actions">
-              <button onClick={() => setError(null)}>Dismiss</button>
+          <Box 
+            sx={{ 
+              position: 'fixed',
+              bottom: 16,
+              right: 16,
+              p: 2,
+              bgcolor: 'error.main',
+              color: 'error.contrastText',
+              borderRadius: 1,
+              boxShadow: 3,
+              maxWidth: 400,
+              zIndex: 1000
+            }}
+          >
+            <Typography variant="body2" sx={{ mb: 1 }}>{error}</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              <Button 
+                size="small" 
+                variant="outlined" 
+                color="inherit" 
+                onClick={() => setError(null)}
+              >
+                Dismiss
+              </Button>
               {!connected && (
-                <button onClick={handleRetryConnection}>Retry Connection</button>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  color="inherit" 
+                  onClick={handleRetryConnection}
+                >
+                  Retry Connection
+                </Button>
               )}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
-      </div>
+      </Box>
     </ThemeProvider>
   );
 }

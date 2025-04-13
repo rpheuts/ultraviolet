@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Divider, Paper, Typography, Tab, Tabs } from '@mui/material';
+import { 
+  Box, 
+  Card, 
+  CardContent, 
+  CircularProgress, 
+  Collapse, 
+  Divider, 
+  Paper, 
+  Tab, 
+  Tabs, 
+  Typography 
+} from '@mui/material';
 import FormGenerator from './forms/FormGenerator';
 import ResponseRenderer from './renderers/ResponseRenderer';
 
@@ -15,7 +26,6 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedFrequency, setSelectedFrequency] = useState(null);
-  const [activeTab, setActiveTab] = useState(0);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
   const [response, setResponse] = useState(null);
@@ -34,7 +44,14 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
       .then(spectrumData => {
         setSpectrum(spectrumData);
         setError(null);
-        setSelectedFrequency(null);
+        
+        // Auto-select the first frequency if available
+        if (spectrumData && spectrumData.wavelengths && spectrumData.wavelengths.length > 0) {
+          setSelectedFrequency(spectrumData.wavelengths[0].frequency);
+        } else {
+          setSelectedFrequency(null);
+        }
+        
         setResponse(null);
       })
       .catch(err => {
@@ -64,7 +81,6 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
       );
       
       setResponse(result);
-      setActiveTab(1); // Switch to response tab
     } catch (err) {
       setFormError(`Error: ${err.message}`);
     } finally {
@@ -72,41 +88,50 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
     }
   };
   
-  // Handle tab change
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
+  // Handle frequency tab change
+  const handleFrequencyChange = (event, newFrequency) => {
+    setSelectedFrequency(newFrequency);
+    setResponse(null);
+    setFormError(null);
+  };
+  
+  // Get the current wavelength definition
+  const getCurrentWavelength = () => {
+    if (!spectrum || !selectedFrequency) return null;
+    return spectrum.wavelengths.find(w => w.frequency === selectedFrequency);
   };
   
   if (!connectionManager || !connectionManager.isConnected()) {
     return (
-      <div className="prism-explorer not-connected">
-        <p>Not connected to server</p>
-        <p>Please check your connection</p>
-      </div>
+      <Box className="prism-explorer not-connected" sx={{ p: 3 }}>
+        <Typography variant="body1">Not connected to server</Typography>
+        <Typography variant="body2">Please check your connection</Typography>
+      </Box>
     );
   }
   
   if (!prismId) {
     return (
-      <div className="prism-explorer empty">
-        <p>Select a prism to explore</p>
-      </div>
+      <Box className="prism-explorer empty" sx={{ p: 3 }}>
+        <Typography variant="body1">Select a prism to explore</Typography>
+      </Box>
     );
   }
   
   if (loading) {
     return (
-      <div className="prism-explorer loading">
-        <p>Loading {prismId}...</p>
-      </div>
+      <Box className="prism-explorer loading" sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+        <Typography variant="body1" sx={{ ml: 2 }}>Loading {prismId}...</Typography>
+      </Box>
     );
   }
   
   if (error) {
     return (
-      <div className="prism-explorer error">
-        <p>{error}</p>
-      </div>
+      <Box className="prism-explorer error" sx={{ p: 3 }}>
+        <Typography variant="body1" color="error">{error}</Typography>
+      </Box>
     );
   }
   
@@ -115,124 +140,95 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
   }
   
   return (
-    <div className="prism-explorer">
-      <h2>{spectrum.name} Prism</h2>
-      <p className="description">{spectrum.description}</p>
-      
-      {spectrum.tags && spectrum.tags.length > 0 && (
-        <div className="tags">
-          <h3>Tags</h3>
-          <div className="tag-list">
+    <Box className="prism-explorer" sx={{ p: 2, width: '100%' }}>
+      <Paper sx={{ mb: 3, p: 2 }}>
+        <Typography variant="h5" gutterBottom>{spectrum.name} Prism</Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          {spectrum.description}
+        </Typography>
+        
+        {spectrum.tags && spectrum.tags.length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
             {spectrum.tags.map(tag => (
-              <span key={tag} className="tag">{tag}</span>
+              <Box 
+                key={tag} 
+                sx={{ 
+                  bgcolor: 'primary.dark', 
+                  color: 'primary.contrastText',
+                  px: 1, 
+                  py: 0.5, 
+                  borderRadius: 1,
+                  fontSize: '0.75rem'
+                }}
+              >
+                {tag}
+              </Box>
             ))}
-          </div>
-        </div>
-      )}
+          </Box>
+        )}
+      </Paper>
       
-      <h3>Available Frequencies</h3>
-      <ul className="frequency-list">
+      {/* Frequency tabs */}
+      <Tabs
+        value={selectedFrequency}
+        onChange={handleFrequencyChange}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ 
+          borderBottom: 1, 
+          borderColor: 'divider',
+          mb: 3
+        }}
+      >
         {spectrum.wavelengths.map(wavelength => (
-          <li 
-            key={wavelength.frequency} 
-            className={`frequency-item ${selectedFrequency === wavelength.frequency ? 'selected' : ''}`}
-            onClick={() => setSelectedFrequency(wavelength.frequency)}
-          >
-            <h4>{wavelength.frequency}</h4>
-            <p>{wavelength.description}</p>
-          </li>
+          <Tab 
+            key={wavelength.frequency}
+            label={wavelength.frequency}
+            value={wavelength.frequency}
+            sx={{ textTransform: 'none' }}
+          />
         ))}
-      </ul>
+      </Tabs>
       
+      {/* Selected frequency content */}
       {selectedFrequency && (
-        <Box sx={{ mt: 4 }}>
-          <Paper>
-            <Tabs 
-              value={activeTab} 
-              onChange={handleTabChange}
-              variant="fullWidth"
-            >
-              <Tab label="Form" />
-              <Tab label="Response" disabled={!response} />
-              <Tab label="Schema" />
-            </Tabs>
-            
-            <Box sx={{ p: 3 }}>
-              {activeTab === 0 && (
-                <FormGenerator
-                  spectrum={spectrum}
-                  frequency={selectedFrequency}
-                  onSubmit={handleFormSubmit}
-                  loading={formSubmitting}
-                  error={formError}
-                />
-              )}
+        <Box>
+          {/* Form card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                {getCurrentWavelength()?.description || selectedFrequency}
+              </Typography>
               
-              {activeTab === 1 && response && (
-                <Box>
+              <FormGenerator
+                spectrum={spectrum}
+                frequency={selectedFrequency}
+                onSubmit={handleFormSubmit}
+                loading={formSubmitting}
+                error={formError}
+              />
+            </CardContent>
+          </Card>
+          
+          {/* Response area */}
+          <Collapse in={!!response}>
+            {response && (
+              <Card>
+                <CardContent>
                   <Typography variant="h6" gutterBottom>Response</Typography>
                   <Paper sx={{ p: 2, maxHeight: '500px', overflow: 'auto' }}>
                     <ResponseRenderer 
                       data={response} 
-                      schema={spectrum.wavelengths.find(w => w.frequency === selectedFrequency)?.output}
+                      schema={getCurrentWavelength()?.output}
                     />
                   </Paper>
-                </Box>
-              )}
-              
-              {activeTab === 2 && (
-                <Box>
-                  <Typography variant="h6" gutterBottom>Input Schema</Typography>
-                  <pre style={{ 
-                    backgroundColor: '#f5f5f5', 
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    overflow: 'auto'
-                  }}>
-                    {JSON.stringify(
-                      spectrum.wavelengths.find(w => w.frequency === selectedFrequency)?.input, 
-                      null, 
-                      2
-                    )}
-                  </pre>
-                  
-                  <Divider sx={{ my: 3 }} />
-                  
-                  <Typography variant="h6" gutterBottom>Output Schema</Typography>
-                  <pre style={{ 
-                    backgroundColor: '#f5f5f5', 
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    overflow: 'auto'
-                  }}>
-                    {JSON.stringify(
-                      spectrum.wavelengths.find(w => w.frequency === selectedFrequency)?.output, 
-                      null, 
-                      2
-                    )}
-                  </pre>
-                </Box>
-              )}
-            </Box>
-          </Paper>
+                </CardContent>
+              </Card>
+            )}
+          </Collapse>
         </Box>
       )}
-      
-      {spectrum.refractions && spectrum.refractions.length > 0 && (
-        <div className="refractions">
-          <h3>Refractions</h3>
-          <ul className="refraction-list">
-            {spectrum.refractions.map(refraction => (
-              <li key={refraction.name} className="refraction-item">
-                <h4>{refraction.name}</h4>
-                <p>Target: {refraction.target}</p>
-                <p>Frequency: {refraction.frequency}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    </Box>
   );
 }
 
