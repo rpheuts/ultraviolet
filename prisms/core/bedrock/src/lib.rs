@@ -5,14 +5,13 @@
 
 pub mod spectrum;
 
-use aws_sdk_bedrockruntime::primitives::Blob;
-use aws_sdk_bedrockruntime::types::ResponseStream;
+use aws_sdk_bedrockruntime::types::{ContentBlockDelta, Message};
+use aws_sdk_bedrockruntime::types::{ContentBlock, ConversationRole, ConverseStreamOutput};
 use serde_json::{json, Value};
-use std::fs;
 use tokio::runtime::Runtime;
 use uuid::Uuid;
 
-use spectrum::{DEFAULT_MODEL, DEFAULT_REGION, InvokeRequest, InvokeWithFilesRequest};
+use spectrum::{DEFAULT_MODEL, DEFAULT_REGION, InvokeRequest};
 use uv_core::{
     Result, UVError, UVLink, UVPrism, UVPulse, UVSpectrum
 };
@@ -52,87 +51,84 @@ impl BedrockPrism {
         })  
     }
 
-    /// Build a prompt with optional file context
-    fn build_prompt(&self, prompt: &str, files: &[String]) -> Result<String> {
-        let mut full_prompt = prompt.to_string();
-
-        if !files.is_empty() {
-            full_prompt.push_str("\n\nI'm also providing the contents of the following files for context:\n");
-            
-            for file in files {
-                let content = fs::read_to_string(file)
-                    .map_err(|e| UVError::ExecutionError(format!("Failed to read file {}: {}", file, e)))?;
-                
-                full_prompt.push_str(&format!("\n=== File: {} ===\n{}\n", file, content));
-            }
-
-            full_prompt.push_str("\nPlease consider these files in your response.");
-        }
-
-        Ok(full_prompt)
-    }
-
-    /// Invoke a model with the given prompt (non-streaming)
+    /// Invoke a model with the given prompt (non-streaming) using the Converse API
     async fn invoke_model(
         &self,
         model: &str,
         prompt: &str,
-        max_tokens: i32,
+        _max_tokens: i32,
     ) -> Result<String> {
-        let request = json!({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": max_tokens,
-            "messages": [{
-                "role": "user",
-                "content": [{"type": "text", "text": prompt}]
-            }]
-        });
-
-        let response = self.client.invoke_model()
+        // Build the message for Converse API
+        let message = Message::builder()
+            .role(ConversationRole::User)
+            .content(ContentBlock::Text(prompt.to_string()))
+            .build()
+            .map_err(|e| {
+                UVError::ExecutionError(format!(
+                    "Failed to construct message: {}",
+                    e
+                ))
+            })?;
+        
+        // Send the request using the converse API
+        let response = self.client.converse()
             .model_id(model)
-            .body(Blob::new(request.to_string()))
-            .content_type("application/json")
-            .accept("application/json")
+            .messages(message)
             .send()
             .await
             .map_err(|e| {
                 UVError::ExecutionError(format!(
                     "Failed to invoke Bedrock model: {} (Make sure AWS credentials are configured in ~/.aws/credentials and have Bedrock permissions)",
-                    e
+                    e.into_service_error()
                 ))
             })?;
 
-        let response_json: Value = serde_json::from_slice(response.body.as_ref())
-            .map_err(|e| UVError::ExecutionError(format!("Failed to parse response: {}", e)))?;
-        
-        response_json["content"][0]["text"].as_str()
-            .map(String::from)
-            .ok_or_else(|| UVError::ExecutionError("Invalid response format".into()))
+        // Extract the response text from the Converse API response format
+       Ok(response.output()
+            .ok_or_else(|| UVError::ExecutionError("Unable to receive output from model".into()))?
+            .as_message()
+            .map_err(|e| UVError::ExecutionError(format!("Failed to parse model ouput: {:?}", e).into()))?
+            .content()
+            .iter().map(|v| {
+                match v {
+                    ContentBlock::ReasoningContent(reasoning_content_block) => {
+                        match reasoning_content_block {
+                            aws_sdk_bedrockruntime::types::ReasoningContentBlock::ReasoningText(reasoning_text_block) => reasoning_text_block.text.clone(),
+                            _ => "".into(),
+                        }
+                    },
+                    ContentBlock::Text(text) => text.clone(),
+                    _ => "".into(),
+                }
+            })
+            .collect::<Vec<String>>()
+            .join(""))
     }
 
-    /// Invoke a model with streaming response
+    /// Invoke a model with streaming response using the Converse API
     async fn invoke_model_stream(
         &self,
         model: &str,
         prompt: &str,
-        max_tokens: i32,
+        _max_tokens: i32,
         id: Uuid,
         link: &UVLink,
     ) -> Result<()> {
-        let request = json!({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": max_tokens,
-            "messages": [{
-                "role": "user",
-                "content": [{"type": "text", "text": prompt}]
-            }]
-        });
+        // Build the message for Converse API
+        let message = Message::builder()
+            .role(ConversationRole::User)
+            .content(ContentBlock::Text(prompt.to_string()))
+            .build()
+            .map_err(|e| {
+                UVError::ExecutionError(format!(
+                    "Failed to construct message: {}",
+                    e
+                ))
+            })?;
 
-        let mut stream = self.client.invoke_model_with_response_stream()
+        let mut stream = self.client.converse_stream()
             .model_id(model)
-            .body(Blob::new(request.to_string()))
-            .content_type("application/json")
-            .accept("application/json")
+            .messages(message)
             .send()
             .await
             .map_err(|e| {
@@ -140,29 +136,56 @@ impl BedrockPrism {
                     "Failed to invoke Bedrock model with streaming: {} (Make sure AWS credentials are configured in ~/.aws/credentials and have Bedrock permissions)",
                     e
                 ))
-            })?
-            .body;
+            })?;
 
-        // Process the streaming response
-        while let Some(event) = stream.recv().await
-            .map_err(|e| UVError::ExecutionError(format!("Failed to receive stream chunk: {}", e)))? {
-            if let ResponseStream::Chunk(data) = event {
-                let bytes = data.bytes
-                    .ok_or_else(|| UVError::ExecutionError("Missing chunk bytes".into()))?;
-                let chunk: Value = serde_json::from_slice(bytes.as_ref())
-                    .map_err(|e| UVError::ExecutionError(format!("Failed to parse chunk: {}", e)))?;
-                
-                if let Some(text) = chunk["delta"]["text"].as_str() {
-                    // Emit each chunk as a photon
-                    link.emit_photon(id, json!({"token": text}))?;
+            let mut reasoning = false;
+        
+            loop {
+                match stream.stream.recv().await {
+                    Ok(Some(event)) => {                        
+                        match event {
+                            ConverseStreamOutput::ContentBlockDelta(content_block_delta_event) => {
+                                if let Some(delta) = content_block_delta_event.delta() {
+                                    match delta {
+                                        ContentBlockDelta::ReasoningContent(reasoning_content_block) => {
+                                            match reasoning_content_block {
+                                                aws_sdk_bedrockruntime::types::ReasoningContentBlockDelta::Text(reasoning_text_block) => {
+                                                    if !reasoning {
+                                                        link.emit_photon(id, json!({"token": "<reasoning>\n"}))?;
+                                                        reasoning = true;
+                                                    }
+
+                                                    link.emit_photon(id, json!({"token": reasoning_text_block.clone()}))?
+                                                },
+                                                _ => continue,
+                                            }
+                                        },
+                                        ContentBlockDelta::Text(text) => {
+                                            if reasoning {
+                                                link.emit_photon(id, json!({"token": "</reasoning>\n"}))?;
+                                                reasoning = false;
+                                            }
+
+                                            link.emit_photon(id, json!({"token": text.clone()}))?
+                                        },
+                                        _ => continue,
+                                    }    
+                                }
+                            },
+                            ConverseStreamOutput::MessageStop(_) => break,
+                            _ => continue,
+                        }
+                    },
+                    Ok(None) => continue,
+                    Err(e) => {
+                        println!("Error receiving from stream: {:?}", e);
+                        return Err(UVError::ExecutionError(format!("Failed to receive stream chunk: {}", e)));
+                    }
                 }
             }
-        }
 
-        // Signal completion
-        link.emit_trap(id, None)?;
-        
-        Ok(())
+            link.emit_trap(id, None)?;
+            Ok(())
     }
 
     /// Handle 'invoke' frequency
@@ -206,32 +229,6 @@ impl BedrockPrism {
 
         Ok(())
     }
-
-    /// Handle 'invoke_with_files' frequency
-    fn handle_invoke_with_files(&self, id: Uuid, input: Value, link: &UVLink) -> Result<()> {
-        // Parse the request
-        let request: InvokeWithFilesRequest = serde_json::from_value(input)
-            .map_err(|e| UVError::InvalidInput(format!("Invalid request format: {}", e)))?;
-
-        // Build the prompt with file context
-        let full_prompt = self.build_prompt(&request.prompt, &request.files)?;
-
-        // Get the model ID (or use default)
-        let model = request.model.unwrap_or_else(|| DEFAULT_MODEL.to_string());
-
-        // Invoke the model using the tokio runtime
-        let response = self.runtime.block_on(async {
-            self.invoke_model(&model, &full_prompt, request.max_tokens).await
-        })?;
-
-        // Emit the response
-        link.emit_photon(id, json!({ "response": response }))?;
-
-        // Signal successful completion
-        link.emit_trap(id, None)?;
-
-        Ok(())
-    }
 }
 
 impl UVPrism for BedrockPrism {
@@ -249,10 +246,6 @@ impl UVPrism for BedrockPrism {
                 },
                 "invoke_stream" => {
                     self.handle_invoke_stream(id, wavefront.input.clone(), link)?;
-                    return Ok(true);
-                },
-                "invoke_with_files" => {
-                    self.handle_invoke_with_files(id, wavefront.input.clone(), link)?;
                     return Ok(true);
                 },
                 _ => {

@@ -42,30 +42,6 @@
         },
         "x-uv-stream": "token"
       }
-    },
-    {
-      "frequency": "invoke_with_files",
-      "description": "Invoke with file context",
-      "input": {
-        "type": "object",
-        "properties": {
-          "model": {"type": "string", "description": "Model ID (optional)"},
-          "prompt": {"type": "string", "description": "Input prompt"},
-          "files": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "File paths to include as context"
-          },
-          "max_tokens": {"type": "integer", "default": 4096}
-        },
-        "required": ["prompt"]
-      },
-      "output": {
-        "type": "object",
-        "properties": {
-          "response": {"type": "string"}
-        }
-      }
     }
   ]
 }

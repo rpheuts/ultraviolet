@@ -6,9 +6,13 @@ import {
   Card, 
   Chip,
   CircularProgress, 
+  FormControl,
   IconButton, 
   InputAdornment, 
+  InputLabel,
+  MenuItem,
   Paper, 
+  Select,
   TextField, 
   Tooltip,
   Typography 
@@ -18,6 +22,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -36,6 +41,8 @@ function ChatView({ connectionManager }) {
   const [error, setError] = useState(null);
   const [contextFiles, setContextFiles] = useState([]);
   const [filesPanelOpen, setFilesPanelOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("us.anthropic.claude-3-7-sonnet-20250219-v1:0");
+  const [showReasoning, setShowReasoning] = useState(true);
   const messagesEndRef = useRef(null);
   const chatServiceRef = useRef(null);
   
@@ -43,8 +50,10 @@ function ChatView({ connectionManager }) {
   useEffect(() => {
     if (connectionManager) {
       chatServiceRef.current = new ChatService(connectionManager);
+      // Set default model to Claude 3.7
+      chatServiceRef.current.setModel(selectedModel);
     }
-  }, [connectionManager]);
+  }, [connectionManager, selectedModel]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -245,43 +254,149 @@ function ChatView({ connectionManager }) {
     ),
   };
   
+  // Process message content to identify reasoning sections
+  const processMessageContent = (content) => {
+    // Check if the content contains reasoning tags
+    if (content.includes('<reasoning>')) {
+      // Split the content by reasoning tags
+      const parts = content.split(/<reasoning>|<\/reasoning>/);
+      
+      // Create an array to hold the processed parts with their types
+      const processedParts = [];
+      
+      // Process each part
+      for (let i = 0; i < parts.length; i++) {
+        if (parts[i].trim()) {
+          // Even indices are regular content, odd indices are reasoning content
+          const isReasoning = i % 2 !== 0;
+          processedParts.push({
+            content: parts[i],
+            isReasoning
+          });
+        }
+      }
+      
+      // Return the processed parts
+      return processedParts;
+    }
+    
+    // If no reasoning tags, return the content as a single regular part
+    return [{ content, isReasoning: false }];
+  };
+  
   // Render a message bubble
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
     
-    return (
-      <Box
-        key={index}
-        sx={{
-          display: 'flex',
-          justifyContent: isUser ? 'flex-end' : 'flex-start',
-          mb: 2
-        }}
-      >
-        <Paper
-          elevation={1}
+    if (isUser) {
+      // User messages remain the same
+      return (
+        <Box
+          key={index}
           sx={{
-            p: 2,
-            maxWidth: '80%',
-            borderRadius: 2,
-            bgcolor: isUser ? 'primary.dark' : 'background.paper',
-            color: isUser ? 'primary.contrastText' : 'text.primary',
-            borderTopRightRadius: isUser ? 0 : 2,
-            borderTopLeftRadius: isUser ? 2 : 0
+            display: 'flex',
+            justifyContent: 'flex-end',
+            mb: 2
           }}
         >
-          {isUser ? (
+          <Paper
+            elevation={1}
+            sx={{
+              p: 2,
+              maxWidth: '80%',
+              borderRadius: 2,
+              bgcolor: 'primary.dark',
+              color: 'primary.contrastText',
+              borderTopRightRadius: 0,
+              borderTopLeftRadius: 2
+            }}
+          >
             <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
               {message.content}
             </Typography>
-          ) : (
-            <ReactMarkdown components={MarkdownComponents}>
-              {message.content}
-            </ReactMarkdown>
-          )}
-        </Paper>
-      </Box>
-    );
+          </Paper>
+        </Box>
+      );
+    } else {
+      // Process assistant messages to handle reasoning sections
+      const processedContent = processMessageContent(message.content);
+      
+      return (
+        <Box
+          key={index}
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-start',
+            mb: 2
+          }}
+        >
+          <Paper
+            elevation={1}
+            sx={{
+              p: 2,
+              maxWidth: '80%',
+              borderRadius: 2,
+              bgcolor: 'background.paper',
+              color: 'text.primary',
+              borderTopRightRadius: 2,
+              borderTopLeftRadius: 0
+            }}
+          >
+            {processedContent.map((part, partIndex) => (
+              (showReasoning || !part.isReasoning) && (
+                <Box 
+                  key={partIndex} 
+                  sx={part.isReasoning ? {
+                    bgcolor: 'rgba(144, 202, 249, 0.1)',
+                    borderLeft: '4px solid',
+                    borderColor: 'info.main',
+                    pl: 1.5,
+                    py: 1,
+                    my: 1,
+                    borderRadius: '0 4px 4px 0',
+                    position: 'relative',
+                    animation: 'fadeIn 0.5s ease-in-out',
+                    '@keyframes fadeIn': {
+                      '0%': {
+                        opacity: 0,
+                        transform: 'translateY(10px)'
+                      },
+                      '100%': {
+                        opacity: 1,
+                        transform: 'translateY(0)'
+                      }
+                    }
+                  } : {}}
+                >
+                  {part.isReasoning && (
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        position: 'absolute',
+                        top: -10,
+                        left: 8,
+                        bgcolor: 'info.main',
+                        color: 'info.contrastText',
+                        px: 1,
+                        py: 0.25,
+                        borderRadius: '4px 4px 0 0',
+                        fontSize: '0.7rem',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      REASONING
+                    </Typography>
+                  )}
+                  <ReactMarkdown components={MarkdownComponents}>
+                    {part.content}
+                  </ReactMarkdown>
+                </Box>
+              )
+            ))}
+          </Paper>
+        </Box>
+      );
+    }
   };
   
   return (
@@ -297,7 +412,28 @@ function ChatView({ connectionManager }) {
           alignItems: 'center'
         }}
       >
-        <Typography variant="h6">AI Chat</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h6">AI Chat</Typography>
+          <FormControl variant="outlined" size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Model</InputLabel>
+            <Select
+              value={selectedModel}
+              onChange={(e) => {
+                setSelectedModel(e.target.value);
+                if (chatServiceRef.current) {
+                  chatServiceRef.current.setModel(e.target.value);
+                }
+              }}
+              label="Model"
+            >
+              <MenuItem value="us.anthropic.claude-3-7-sonnet-20250219-v1:0">Claude 3.7</MenuItem>
+              <MenuItem value="us.anthropic.claude-3-5-sonnet-20241022-v2:0">Claude 3.5</MenuItem>
+              <MenuItem value="us.deepseek.r1-v1:0">DeepSeek R1</MenuItem>
+              <MenuItem value="us.meta.llama3-1-405b-instruct-v1:0">Llama 3</MenuItem>
+              <MenuItem value="us.amazon.nova-pro-v1:0">AWS Nova</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Tooltip title="Context Files">
             <IconButton 
@@ -307,6 +443,14 @@ function ChatView({ connectionManager }) {
               <Badge badgeContent={contextFiles.length} color="primary">
                 <AttachFileIcon />
               </Badge>
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={showReasoning ? "Hide reasoning" : "Show reasoning"}>
+            <IconButton 
+              color={showReasoning ? "primary" : "inherit"}
+              onClick={() => setShowReasoning(!showReasoning)}
+            >
+              <PsychologyIcon />
             </IconButton>
           </Tooltip>
           <IconButton 

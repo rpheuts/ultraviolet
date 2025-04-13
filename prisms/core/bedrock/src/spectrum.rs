@@ -5,25 +5,11 @@ use serde::{Deserialize, Serialize};
 pub struct InvokeRequest {
     /// The prompt text to send to the model
     pub prompt: String,
-    /// Optional model ID (defaults to Claude 3.5 Sonnet)
+    /// Optional model ID (defaults to Claude 3.7 Sonnet)
     pub model: Option<String>,
     /// Maximum number of tokens to generate (default: 4096)
     #[serde(default = "default_max_tokens")]
     pub max_tokens: i32,
-}
-
-/// Request input for the invoke_with_files method
-#[derive(Debug, Deserialize)]
-pub struct InvokeWithFilesRequest {
-    /// The prompt text to send to the model
-    pub prompt: String,
-    /// Optional model ID (defaults to Claude 3.5 Sonnet)
-    pub model: Option<String>,
-    /// Maximum number of tokens to generate (default: 4096)
-    #[serde(default = "default_max_tokens")]
-    pub max_tokens: i32,
-    /// File paths to include as context
-    pub files: Vec<String>,
 }
 
 /// Response from a Bedrock invocation
@@ -38,8 +24,17 @@ fn default_max_tokens() -> i32 {
     4096
 }
 
-/// Claude 3.5 Sonnet Bedrock model ID
-pub const DEFAULT_MODEL: &str = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+/// Claude 3.7 Sonnet Bedrock model ID
+pub const DEFAULT_MODEL: &str = "us.anthropic.claude-3-7-sonnet-20250219-v1:0";
 
 /// Default AWS region for Bedrock
 pub const DEFAULT_REGION: &str = "us-west-2";
+
+/// Available models for the model selector
+pub const AVAILABLE_MODELS: &[(&str, &str)] = &[
+    ("Claude 3.7", "us.anthropic.claude-3-7-sonnet-20250219-v1:0"),
+    ("Claude 3.5", "us.anthropic.claude-3-5-sonnet-20241022-v2:0"),
+    ("DeepSeek R1", "us.deepseek.r1-v1:0"),
+    ("Llama 3", "us.meta.llama3-1-405b-instruct-v1:0"),
+    ("AWS Nova", "us.amazon.nova-pro-v1:0"),
+];
