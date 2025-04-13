@@ -40,7 +40,7 @@
         "properties": {
             "token": {"type": "string", "description": "Single output token from model"}
         },
-        "x-uv-stream": "text"
+        "x-uv-stream": "token"
       }
     },
     {

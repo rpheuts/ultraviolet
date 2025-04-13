@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Box, Divider, Paper, Typography, Tab, Tabs } from '@mui/material';
+import FormGenerator from './forms/FormGenerator';
+import ResponseRenderer from './renderers/ResponseRenderer';
 
 /**
  * PrismExplorer component displays details about a selected prism
@@ -12,12 +15,17 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedFrequency, setSelectedFrequency] = useState(null);
+  const [activeTab, setActiveTab] = useState(0);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
+  const [response, setResponse] = useState(null);
   
   // Load spectrum when prism changes
   useEffect(() => {
     if (!prismId || !connectionManager || !connectionManager.isConnected()) {
       setSpectrum(null);
       setSelectedFrequency(null);
+      setResponse(null);
       return;
     }
     
@@ -27,6 +35,7 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
         setSpectrum(spectrumData);
         setError(null);
         setSelectedFrequency(null);
+        setResponse(null);
       })
       .catch(err => {
         setError(`Failed to load spectrum: ${err.message}`);
@@ -36,6 +45,37 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
         setLoading(false);
       });
   }, [prismId, prismDiscovery, connectionManager]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Handle form submission
+  const handleFormSubmit = async (formData) => {
+    if (!connectionManager || !prismId || !selectedFrequency) {
+      return;
+    }
+    
+    setFormSubmitting(true);
+    setFormError(null);
+    setResponse(null);
+    
+    try {
+      const result = await connectionManager.sendWavefront(
+        prismId,
+        selectedFrequency,
+        formData
+      );
+      
+      setResponse(result);
+      setActiveTab(1); // Switch to response tab
+    } catch (err) {
+      setFormError(`Error: ${err.message}`);
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+  
+  // Handle tab change
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
   
   if (!connectionManager || !connectionManager.isConnected()) {
     return (
@@ -100,22 +140,83 @@ function PrismExplorer({ prismId, prismDiscovery, connectionManager }) {
           >
             <h4>{wavelength.frequency}</h4>
             <p>{wavelength.description}</p>
-            
-            {selectedFrequency === wavelength.frequency && (
-              <div className="frequency-details">
-                <div className="input-schema">
-                  <h5>Input Schema</h5>
-                  <pre>{JSON.stringify(wavelength.input, null, 2)}</pre>
-                </div>
-                <div className="output-schema">
-                  <h5>Output Schema</h5>
-                  <pre>{JSON.stringify(wavelength.output, null, 2)}</pre>
-                </div>
-              </div>
-            )}
           </li>
         ))}
       </ul>
+      
+      {selectedFrequency && (
+        <Box sx={{ mt: 4 }}>
+          <Paper>
+            <Tabs 
+              value={activeTab} 
+              onChange={handleTabChange}
+              variant="fullWidth"
+            >
+              <Tab label="Form" />
+              <Tab label="Response" disabled={!response} />
+              <Tab label="Schema" />
+            </Tabs>
+            
+            <Box sx={{ p: 3 }}>
+              {activeTab === 0 && (
+                <FormGenerator
+                  spectrum={spectrum}
+                  frequency={selectedFrequency}
+                  onSubmit={handleFormSubmit}
+                  loading={formSubmitting}
+                  error={formError}
+                />
+              )}
+              
+              {activeTab === 1 && response && (
+                <Box>
+                  <Typography variant="h6" gutterBottom>Response</Typography>
+                  <Paper sx={{ p: 2, maxHeight: '500px', overflow: 'auto' }}>
+                    <ResponseRenderer 
+                      data={response} 
+                      schema={spectrum.wavelengths.find(w => w.frequency === selectedFrequency)?.output}
+                    />
+                  </Paper>
+                </Box>
+              )}
+              
+              {activeTab === 2 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom>Input Schema</Typography>
+                  <pre style={{ 
+                    backgroundColor: '#f5f5f5', 
+                    padding: '1rem',
+                    borderRadius: '4px',
+                    overflow: 'auto'
+                  }}>
+                    {JSON.stringify(
+                      spectrum.wavelengths.find(w => w.frequency === selectedFrequency)?.input, 
+                      null, 
+                      2
+                    )}
+                  </pre>
+                  
+                  <Divider sx={{ my: 3 }} />
+                  
+                  <Typography variant="h6" gutterBottom>Output Schema</Typography>
+                  <pre style={{ 
+                    backgroundColor: '#f5f5f5', 
+                    padding: '1rem',
+                    borderRadius: '4px',
+                    overflow: 'auto'
+                  }}>
+                    {JSON.stringify(
+                      spectrum.wavelengths.find(w => w.frequency === selectedFrequency)?.output, 
+                      null, 
+                      2
+                    )}
+                  </pre>
+                </Box>
+              )}
+            </Box>
+          </Paper>
+        </Box>
+      )}
       
       {spectrum.refractions && spectrum.refractions.length > 0 && (
         <div className="refractions">

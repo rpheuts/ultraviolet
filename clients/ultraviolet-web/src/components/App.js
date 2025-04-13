@@ -1,10 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import Navigation from './Navigation';
 import PrismExplorer from './PrismExplorer';
 import StatusBar from './StatusBar';
 import ConnectionManager from '../services/ConnectionManager';
 import PrismDiscovery from '../services/PrismDiscovery';
 import '../App.css';
+
+// Create a theme
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#2196f3', // Blue
+    },
+    secondary: {
+      main: '#ff9800', // Orange
+    },
+  },
+  typography: {
+    fontFamily: [
+      '-apple-system',
+      'BlinkMacSystemFont',
+      '"Segoe UI"',
+      'Roboto',
+      'Oxygen',
+      'Ubuntu',
+      'Cantarell',
+      '"Open Sans"',
+      '"Helvetica Neue"',
+      'sans-serif',
+    ].join(','),
+  },
+});
 
 /**
  * Main application component
@@ -95,40 +122,43 @@ function App() {
   };
   
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Ultraviolet Web Client</h1>
-        <StatusBar connected={connected} />
-      </header>
-      
-      <div className="app-content">
-        <Navigation 
-          prisms={prisms} 
-          loading={loading}
-          onSelectPrism={setSelectedPrism} 
-          selectedPrism={selectedPrism}
-          connected={connected}
-        />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <div className="app">
+        <header className="app-header">
+          <h1>Ultraviolet Web Client</h1>
+          <StatusBar connected={connected} />
+        </header>
         
-        <PrismExplorer 
-          prismId={selectedPrism}
-          prismDiscovery={prismDiscoveryRef.current}
-          connectionManager={connectionManagerRef.current}
-        />
-      </div>
-      
-      {error && (
-        <div className="error-message">
-          {error}
-          <div className="error-actions">
-            <button onClick={() => setError(null)}>Dismiss</button>
-            {!connected && (
-              <button onClick={handleRetryConnection}>Retry Connection</button>
-            )}
-          </div>
+        <div className="app-content">
+          <Navigation 
+            prisms={prisms} 
+            loading={loading}
+            onSelectPrism={setSelectedPrism} 
+            selectedPrism={selectedPrism}
+            connected={connected}
+          />
+          
+          <PrismExplorer 
+            prismId={selectedPrism}
+            prismDiscovery={prismDiscoveryRef.current}
+            connectionManager={connectionManagerRef.current}
+          />
         </div>
-      )}
-    </div>
+        
+        {error && (
+          <div className="error-message">
+            {error}
+            <div className="error-actions">
+              <button onClick={() => setError(null)}>Dismiss</button>
+              {!connected && (
+                <button onClick={handleRetryConnection}>Retry Connection</button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </ThemeProvider>
   );
 }
 
