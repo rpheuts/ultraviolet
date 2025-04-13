@@ -128,9 +128,7 @@ const StringField = ({
         ))}
       </TextField>
       
-      {!validationError && description && (
-        <FormHelperText>{description}</FormHelperText>
-      )}
+     
     </FormControl>
   );
 };

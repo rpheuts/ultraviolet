@@ -102,6 +102,53 @@ class ConnectionManager {
   }
 
   /**
+   * Send a wavefront with streaming response, calling a callback for each token
+   * @param {string} prism - Prism ID in namespace:name format
+   * @param {string} frequency - Frequency (method) to call
+   * @param {object} input - Input data for the wavefront
+   * @param {function} onToken - Callback function called with each token as it arrives
+   * @returns {Promise} Resolves with complete response data array when finished, rejects on error
+   */
+  sendStreamingWavefront(prism, frequency, input, onToken) {
+    if (!this.isConnected()) {
+      return Promise.reject(new Error('Not connected to server'));
+    }
+    
+    const id = this.generateUUID();
+    const message = {
+      Wavefront: {
+        id,
+        prism,
+        frequency,
+        input
+      }
+    };
+    
+    return new Promise((resolve, reject) => {
+      const responseData = [];
+      
+      this.pendingRequests.set(id, {
+        onPhoton: (data) => {
+          responseData.push(data);
+          if (onToken && typeof onToken === 'function') {
+            onToken(data);
+          }
+        },
+        onTrap: (error) => {
+          this.pendingRequests.delete(id);
+          if (error) {
+            reject(error);
+          } else {
+            resolve(responseData);
+          }
+        }
+      });
+      
+      this.socket.send(JSON.stringify(message));
+    });
+  }
+
+  /**
    * Handle incoming WebSocket messages
    * @param {string} data - Message data
    */

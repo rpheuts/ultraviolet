@@ -1,5 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Button, ThemeProvider, createTheme, CssBaseline, Typography } from '@mui/material';
+import { 
+  Box, 
+  Button, 
+  IconButton,
+  ThemeProvider, 
+  ToggleButton, 
+  ToggleButtonGroup, 
+  Tooltip, 
+  createTheme, 
+  CssBaseline, 
+  Typography 
+} from '@mui/material';
+import AppsIcon from '@mui/icons-material/Apps';
+import ChatIcon from '@mui/icons-material/Chat';
+import ChatView from './ChatView';
 import Navigation from './Navigation';
 import PrismExplorer from './PrismExplorer';
 import StatusBar from './StatusBar';
@@ -56,6 +70,7 @@ function App() {
   const [selectedPrism, setSelectedPrism] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentView, setCurrentView] = useState('prisms'); // 'prisms' or 'chat'
   
   // Use refs to maintain service instances across renders
   const connectionManagerRef = useRef(null);
@@ -159,25 +174,55 @@ function App() {
           }}
         >
           <Typography variant="h5">Ultraviolet Web Client</Typography>
-          <StatusBar connected={connected} />
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <ToggleButtonGroup
+              value={currentView}
+              exclusive
+              onChange={(e, newView) => newView && setCurrentView(newView)}
+              aria-label="view selector"
+              size="small"
+            >
+              <ToggleButton value="prisms" aria-label="prisms view">
+                <Tooltip title="Prisms Explorer">
+                  <AppsIcon />
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="chat" aria-label="chat view">
+                <Tooltip title="AI Chat">
+                  <ChatIcon />
+                </Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+            
+            <StatusBar connected={connected} />
+          </Box>
         </Box>
         
         <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <Navigation 
-            prisms={prisms} 
-            loading={loading}
-            onSelectPrism={setSelectedPrism} 
-            selectedPrism={selectedPrism}
-            connected={connected}
-          />
-          
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
-            <PrismExplorer 
-              prismId={selectedPrism}
-              prismDiscovery={prismDiscoveryRef.current}
+          {currentView === 'prisms' ? (
+            <>
+              <Navigation 
+                prisms={prisms} 
+                loading={loading}
+                onSelectPrism={setSelectedPrism} 
+                selectedPrism={selectedPrism}
+                connected={connected}
+              />
+              
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
+                <PrismExplorer 
+                  prismId={selectedPrism}
+                  prismDiscovery={prismDiscoveryRef.current}
+                  connectionManager={connectionManagerRef.current}
+                />
+              </Box>
+            </>
+          ) : (
+            <ChatView 
               connectionManager={connectionManagerRef.current}
             />
-          </Box>
+          )}
         </Box>
         
         {error && (
