@@ -11,6 +11,7 @@ members = [
     "prisms/aws/burner",
     "prisms/aws/cdk",
     "prisms/aws/accounts",
+    "prisms/aws/cradle",
     "prisms/aws/governance",
     "prisms/aws/oppie",
     "prisms/core/bedrock",
