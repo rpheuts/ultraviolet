@@ -12,6 +12,7 @@ members = [
     "prisms/aws/cdk",
     "prisms/aws/accounts",
     "prisms/aws/governance",
+    "prisms/aws/oppie",
     "prisms/core/bedrock",
     "prisms/system/discovery"
 ]
