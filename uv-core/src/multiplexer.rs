@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
-use std::thread;
+use std::thread::{self};
 use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use serde_json::Value;
@@ -147,6 +147,19 @@ impl PrismMultiplexer {
                 return Err(UVError::ExecutionError("Failed to load prism".to_string()));
             }
         };
+
+
+        // --- Get the Arc<PrismFactory> to keep the library alive ---
+        let factory_arc = { // Scope for read lock
+            let factories = self.factories.read().unwrap();
+            // We expect it to exist now because load_prism succeeded
+            factories.get(&prism_id).cloned()
+                .ok_or_else(|| {
+                    // This should ideally not happen if load_prism just succeeded
+                    println!("[EstablishLink] CRITICAL: Factory disappeared immediately after load for {}", prism_id);
+                    UVError::Other(format!("Factory disappeared unexpectedly for {}", prism_id))
+                })?
+        };
         
         // Load the spectrum for the prism
         let spectrum = match self.load_spectrum(&prism_id) {
@@ -157,9 +170,13 @@ impl PrismMultiplexer {
                 return Err(UVError::ExecutionError("Failed to load spectrum".to_string()));
             }
         };
-        
+
         // Spawn a thread to run the prism
         thread::spawn(move || {
+            if std::sync::Arc::strong_count(&factory_arc.library) <= 0 {
+                eprintln!("Error in prism thread, prism reference cleaned up");
+            }
+
             // Initialize the prism with its spectrum
             if let Err(e) = prism.init((*spectrum).clone()) {
                 // Report initialization error
