@@ -2,6 +2,7 @@ mod server;
 mod local;
 mod parsing;
 mod rendering;
+mod chat;
 
 use std::ffi::OsString;
 use anyhow::Result;
@@ -9,6 +10,7 @@ use anyhow::Result;
 use parsing::cli_commands::match_cli_input;
 use server::handle_server;
 use local::handle_local;
+use chat::handle_chat;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -32,6 +34,23 @@ async fn main() -> Result<()> {
                 .expect("No address and port specified");
 
             handle_server(bind_address.parse()?, sync_matches.get_flag("static"), debug).await?;
+        },
+        Some(("chat", chat_matches)) => {
+            let model = chat_matches.get_one::<String>("model")
+                .unwrap_or(&"us.anthropic.claude-3-7-sonnet-20250219-v1:0".to_string())
+                .to_string();
+            
+            let max_tokens = chat_matches.get_one::<String>("max_tokens")
+                .unwrap_or(&"4096".to_string())
+                .parse::<i32>()
+                .unwrap_or(4096);
+            
+            let context_files = chat_matches.get_many::<String>("context_file")
+                .unwrap_or_default()
+                .cloned()
+                .collect();
+            
+            handle_chat(&model, max_tokens, context_files)?;
         },
         Some((external, sub_m)) => {
             let args: Vec<String> = sub_m

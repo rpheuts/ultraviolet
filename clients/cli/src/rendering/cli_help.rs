@@ -4,12 +4,84 @@ use serde_json::Value;
 use std::{collections::HashMap, fs, path::PathBuf};
 use uv_core::UVSpectrum;
 
+/// Render help information for the chat command
+pub fn render_chat_help() -> Result<()> {
+    println!("{}", "Chat Command".bold().bright_purple());
+    println!("{}", "============".bright_purple());
+    println!();
+    println!("{}", "Start an interactive AI chat session using Bedrock LLMs".bright_white());
+    println!();
+    
+    println!("{}", "Options:".underline().bright_blue());
+    println!("  {}{} {}", "-m, --model".bright_green(), ":".bright_white(), "Specify the LLM model to use".bright_white());
+    println!("      {}: {}", "Default".bright_white(), "us.anthropic.claude-3-7-sonnet-20250219-v1:0".bright_cyan());
+    println!();
+    println!("  {}{} {}", "--max-tokens".bright_green(), ":".bright_white(), "Maximum number of tokens for the response".bright_white());
+    println!("      {}: {}", "Default".bright_white(), "4096".bright_cyan());
+    println!();
+    println!("  {}{} {}", "-c, --context".bright_green(), ":".bright_white(), "Add a file as context for the AI (can be used multiple times)".bright_white());
+    println!();
+    
+    println!("{}", "Available Models:".underline().bright_blue());
+    println!("  {}: {}", "Claude 3.7".bright_green(), "us.anthropic.claude-3-7-sonnet-20250219-v1:0".bright_white());
+    println!("  {}: {}", "Claude 3.5".bright_green(), "us.anthropic.claude-3-5-sonnet-20241022-v2:0".bright_white());
+    println!("  {}: {}", "DeepSeek R1".bright_green(), "us.deepseek.r1-v1:0".bright_white());
+    println!("  {}: {}", "Llama 3".bright_green(), "us.meta.llama3-1-405b-instruct-v1:0".bright_white());
+    println!("  {}: {}", "AWS Nova".bright_green(), "us.amazon.nova-pro-v1:0".bright_white());
+    println!();
+    
+    println!("{}", "Usage examples:".underline().bright_blue());
+    println!("  {}", "uv chat".bright_green());
+    println!("  {}", "uv chat --model us.anthropic.claude-3-5-sonnet-20241022-v2:0".bright_green());
+    println!("  {}", "uv chat --context file1.txt --context file2.py".bright_green());
+    println!();
+    
+    println!("{}", "Chat Commands:".underline().bright_blue());
+    println!("  {}: {}", "exit".bright_yellow(), "Exit the chat session".bright_white());
+    println!("  {}: {}", "quit".bright_yellow(), "Exit the chat session".bright_white());
+    
+    Ok(())
+}
+
+/// Render help information for the server command
+pub fn render_server_help() -> Result<()> {
+    println!("{}", "Server Command".bold().bright_purple());
+    println!("{}", "==============".bright_purple());
+    println!();
+    println!("{}", "Run Ultra-Violet in server mode".bright_white());
+    println!();
+    
+    println!("{}", "Options:".underline().bright_blue());
+    println!("  {}{} {}", "-a, --address".bright_green(), ":".bright_white(), "Local address and port to host UV on".bright_white());
+    println!("      {}: {}", "Default".bright_white(), "127.0.0.1:3000".bright_cyan());
+    println!();
+    println!("  {}{} {}", "--no_static".bright_green(), ":".bright_white(), "Don't host the static files".bright_white());
+    println!("      {}: {}", "Default".bright_white(), "false (static files are hosted)".bright_cyan());
+    println!();
+    
+    println!("{}", "Usage examples:".underline().bright_blue());
+    println!("  {}", "uv server".bright_green());
+    println!("  {}", "uv server --address 0.0.0.0:8080".bright_green());
+    println!("  {}", "uv server --no_static".bright_green());
+    
+    Ok(())
+}
+
 /// Handle help request based on provided prism and args
 pub fn handle_help_request(prism: &str, args: &[String]) -> Result<()> {
     // Determine the help level based on the inputs
     if prism == "help" || prism == "--help" || prism == "-h" {
         // Case: Global help (should be handled before reaching here, but as a fallback)
         return render_global_help();
+    }
+    
+    // Check for built-in commands
+    if prism == "chat" {
+        return render_chat_help();
+    }
+    
+    if prism == "server" {
+        return render_server_help();
     }
     
     // Try to load the prism spectrum
@@ -64,7 +136,14 @@ pub fn render_global_help() -> Result<()> {
     }
     
     println!();
+    println!("{}", "Built-in commands:".underline().bright_blue());
+    println!("  {}{} {}", "server".bright_green(), ":".bright_white(), "Run Ultra-Violet in server mode".bright_white());
+    println!("  {}{} {}", "chat".bright_green(), ":".bright_white(), "Start an interactive AI chat session using Bedrock LLMs".bright_white());
+    
+    println!();
     println!("{}", "Usage:".underline().bright_blue());
+    println!("  {} {} {}", "uv".bright_green(), "server".bright_yellow(), "[options]".bright_white());
+    println!("  {} {} {}", "uv".bright_green(), "chat".bright_yellow(), "[options]".bright_white());
     println!("  {} {} {}", "uv".bright_green(), "[prism]".bright_yellow(), "[frequency] [options]".bright_white());
     println!("  {} {} {}    {}", "uv".bright_green(), "[prism]".bright_yellow(), "--help".bright_cyan(), "Show help for a prism".bright_white());
     println!("  {} {} {} {}    {}", "uv".bright_green(), "[prism]".bright_yellow(), "[frequency]".bright_yellow(), "--help".bright_cyan(), "Show help for a specific frequency".bright_white());

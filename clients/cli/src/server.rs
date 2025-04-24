@@ -21,7 +21,10 @@ pub async fn handle_server(bind_address: SocketAddr, server_static: bool, debug:
         log_level,
     };
 
-    open::that(format!("http://{}", options.bind_address))?;
+    if server_static {
+        open::that(format!("http://{}", options.bind_address))?;
+    }
+    
     start_service(options).await.map_err(|e| anyhow::anyhow!("Service error: {}", e))?;
 
     Ok(())
