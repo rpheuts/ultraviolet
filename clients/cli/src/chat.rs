@@ -209,7 +209,7 @@ pub fn handle_chat(model: &str, max_tokens: i32, context_files: Vec<String>) -> 
         }
         
         // Check for exit/quit commands
-        if input == "exit" || input == "quit" || input == "/exit" || input == "/quit" {
+        if input == "/exit" || input == "/quit" {
             break;
         }
         
@@ -256,8 +256,6 @@ pub fn handle_chat(model: &str, max_tokens: i32, context_files: Vec<String>) -> 
             println!("  {}{} {}", "/help".bright_green(), ":".bright_white(), "Show this help message".bright_white());
             println!("  {}{} {}", "/exit".bright_green(), ":".bright_white(), "Exit the chat session".bright_white());
             println!("  {}{} {}", "/quit".bright_green(), ":".bright_white(), "Exit the chat session".bright_white());
-            println!("  {}{} {}", "exit".bright_green(), ":".bright_white(), "Exit the chat session".bright_white());
-            println!("  {}{} {}", "quit".bright_green(), ":".bright_white(), "Exit the chat session".bright_white());
             continue;
         }
         
