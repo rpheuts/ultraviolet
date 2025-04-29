@@ -469,9 +469,9 @@ function ChatView({ connectionManager }) {
         open={filesPanelOpen}
         onClose={() => setFilesPanelOpen(false)}
         files={contextFiles}
-        onAddFile={(file) => {
-          setContextFiles([...contextFiles, file]);
-          // Keep panel open after adding a file
+        onAddFiles={(newFiles) => {
+          setContextFiles([...contextFiles, ...newFiles]);
+          // Keep panel open after adding files
         }}
         onRemoveFile={(fileId) => {
           setContextFiles(contextFiles.filter(file => file.id !== fileId));
@@ -578,6 +578,21 @@ function ChatView({ connectionManager }) {
             value={inputValue}
             onChange={handleInputChange}
             disabled={!connectionManager || !connectionManager.isConnected() || isTyping}
+            multiline
+            minRows={1}
+            maxRows={8}
+            onKeyDown={(e) => {
+              // Submit on Enter, but allow Shift+Enter for newlines
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+            sx={{
+              '& .MuiInputBase-root': {
+                alignItems: 'flex-end' // Align the send button to the bottom
+              }
+            }}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">

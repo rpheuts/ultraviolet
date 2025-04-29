@@ -18,26 +18,37 @@ import DeleteIcon from '@mui/icons-material/Delete';
  * @param {boolean} props.open - Whether the panel is open
  * @param {function} props.onClose - Function to call when closing the panel
  * @param {Array} props.files - Array of file objects
- * @param {function} props.onAddFile - Function to call when adding a file
+ * @param {function} props.onAddFiles - Function to call when adding files
  * @param {function} props.onRemoveFile - Function to call when removing a file
  */
-function FileContextPanel({ open, onClose, files, onAddFile, onRemoveFile }) {
+function FileContextPanel({ open, onClose, files, onAddFiles, onRemoveFile }) {
   // Handle file selection
   const handleFileSelect = (event) => {
-    const selectedFile = event.target.files[0];
-    if (!selectedFile) return;
+    const selectedFiles = Array.from(event.target.files);
+    if (!selectedFiles.length) return;
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const fileContent = e.target.result;
-      onAddFile({
-        id: generateUUID(),
-        name: selectedFile.name,
-        content: fileContent,
-        size: selectedFile.size
-      });
-    };
-    reader.readAsText(selectedFile);
+    const newFiles = [];
+    let filesProcessed = 0;
+    
+    selectedFiles.forEach(selectedFile => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const fileContent = e.target.result;
+        newFiles.push({
+          id: generateUUID(),
+          name: selectedFile.name,
+          content: fileContent,
+          size: selectedFile.size
+        });
+        
+        filesProcessed++;
+        if (filesProcessed === selectedFiles.length) {
+          // All files processed, now call onAddFiles once with all files
+          onAddFiles(newFiles);
+        }
+      };
+      reader.readAsText(selectedFile);
+    });
   };
   
   // Generate a UUID for file IDs
@@ -128,10 +139,11 @@ function FileContextPanel({ open, onClose, files, onAddFile, onRemoveFile }) {
             startIcon={<AttachFileIcon />}
             fullWidth
           >
-            Add File
+            Add Files
             <input
               type="file"
               hidden
+              multiple
               onChange={handleFileSelect}
             />
           </Button>
