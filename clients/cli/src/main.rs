@@ -1,5 +1,6 @@
 mod server;
 mod local;
+mod remote;
 mod parsing;
 mod rendering;
 mod chat;
@@ -10,6 +11,7 @@ use anyhow::Result;
 use parsing::cli_commands::match_cli_input;
 use server::handle_server;
 use local::handle_local;
+use remote::handle_remote;
 use chat::handle_chat;
 
 #[tokio::main]
@@ -53,13 +55,18 @@ async fn main() -> Result<()> {
             handle_chat(&model, max_tokens, context_files)?;
         },
         Some((external, sub_m)) => {
-            let args: Vec<String> = sub_m
+            let sub_args: Vec<String> = sub_m
                 .get_many::<OsString>("")
                 .unwrap_or_default()
                 .filter_map(|s| s.to_str().map(|s| s.to_string()))
                 .collect();
 
-            handle_local(external, args, output)?;
+            // If the remote flag is provided, use handle_remote instead
+            if let Some(remote_url) = args.get_one::<String>("remote") {
+                handle_remote(remote_url, external, sub_args, output)?;
+            } else {
+                handle_local(external, sub_args, output)?;
+            }
         }
         _ => unreachable!()
     }

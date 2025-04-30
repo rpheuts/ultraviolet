@@ -1,0 +1,26 @@
+{
+  "name": "remote",
+  "namespace": "system",
+  "version": "0.1.0",
+  "description": "Connect to remote Ultraviolet instances",
+  "wavelengths": [
+    {
+      "frequency": "refract",
+      "description": "Send a request to a remote prism",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {"type": "string", "description": "WebSocket URL of the remote server"},
+          "prism": {"type": "string", "description": "Target prism identifier"},
+          "frequency": {"type": "string", "description": "Target frequency"},
+          "input": {"type": "object", "description": "Input data for the target"}
+        },
+        "required": ["url", "prism", "frequency"]
+      },
+      "output": {
+        "type": "object",
+        "description": "Passthrough of the remote prism response"
+      }
+    }
+  ]
+}

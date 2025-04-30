@@ -140,6 +140,10 @@ impl UVSpectrum {
         Err(UVError::Other(format!("Spectrum file not found for prism: {}", prism_id)))
     }
 
+    pub fn new_from_json(json: String) -> Result<UVSpectrum, UVError> {
+        return Self::try_load(&json);
+    }
+
     /// Get the standard installation directory for prisms.
     fn get_install_dir() -> Result<PathBuf, UVError> {
         let home_dir = std::env::var("HOME").map_err(|_| UVError::Other("HOME environment variable not set".to_string()))?;
@@ -171,6 +175,13 @@ impl UVSpectrum {
             .map_err(|e| UVError::Other(format!("Failed to read spectrum file {}: {}", path.display(), e)))?;
             
         let spectrum: UVSpectrum = serde_json::from_str(&content)?;
+        
+        Ok(spectrum)
+    }
+
+    /// Try to load a spectrum from a specific path.
+    fn try_load(content: &String) -> Result<UVSpectrum, UVError> {
+        let spectrum: UVSpectrum = serde_json::from_str(content)?;
         
         Ok(spectrum)
     }

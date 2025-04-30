@@ -51,7 +51,7 @@ fn send_wavefront(prism_id: &String, frequency: &str, input: Value) -> Result<UV
     Ok(link)
 }
 
-fn process_response(link: UVLink, output_schema: &UVSchemaDefinition, output: Option<&String>) -> Result<()> {
+pub fn process_response(link: UVLink, output_schema: &UVSchemaDefinition, output: Option<&String>) -> Result<()> {
     // see if we're dealing with a stream
     if let Some(stream_type) = output_schema.schema.get("x-uv-stream") {
         return process_stream(stream_type.to_string(), link, output_schema)

@@ -15,7 +15,8 @@ members = [
     "prisms/aws/governance",
     "prisms/aws/oppie",
     "prisms/core/bedrock",
-    "prisms/system/discovery"
+    "prisms/system/discovery",
+    "prisms/system/remote"
 ]
 
 [workspace.dependencies]

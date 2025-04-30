@@ -33,6 +33,13 @@ pub fn match_cli_input() -> Result<ArgMatches> {
                 .action(ArgAction::Set)
                 
         )
+        .arg(
+            Arg::new("remote")
+                .long("remote")
+                .help("WebSocket URL to a remote Ultraviolet server (e.g., ws://localhost:3000/ws)")
+                .action(ArgAction::Set)
+                .global(true)
+        )
         .subcommand(
             Command::new("server")
             .short_flag('s')
