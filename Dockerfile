@@ -23,13 +23,14 @@ RUN cargo build --release
 RUN mkdir -p /build/.uv && \
     UV_INSTALL_DIR=/build/.uv ./scripts/install-uv.sh
 
-# Runtime image: Debian slim for minimal size
-FROM debian:bookworm-slim as runtime
+# Base runtime image: Debian slim for minimal size
+FROM debian:bookworm-slim as base-runtime
 
 # Install runtime dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     openssl \
+    curl \
     ca-certificates \
     supervisor && \
     rm -rf /var/lib/apt/lists/*
@@ -49,8 +50,24 @@ RUN chown -R uvuser:uvuser /home/uvuser/.uv
 # Configure supervisor for auto-restart
 COPY docker/supervisord.conf /etc/supervisor/conf.d/uv.conf
 
+# Set HOME environment variable explicitly
+ENV HOME="/home/uvuser"
+
 # Expose the server port
 EXPOSE 3000
 
 # Run supervisor as the entry point
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+
+# Tailscale-enabled runtime image
+FROM base-runtime as tailscale-runtime
+
+# Install Tailscale
+RUN curl -fsSL https://tailscale.com/install.sh | sh
+
+# Add Tailscale entrypoint wrapper
+COPY docker/tailscale-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Override the entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
