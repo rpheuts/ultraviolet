@@ -111,6 +111,11 @@ impl RemoteBridgePrism {
                                 link.emit_photon(id, data)?;
                             },
                             UVPulse::Trap(Trap { error, .. }) => {
+                                // If there's an error in the trap, print it to stderr
+                                if let Some(err) = &error {
+                                    eprintln!("Error from remote: {}", err);
+                                }
+                                
                                 // Forward the trap to the local client
                                 link.emit_trap(id, error)?;
                                 

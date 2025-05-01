@@ -4,6 +4,7 @@ use uuid::Uuid;
 use uv_core::{PrismMultiplexer, UVSpectrum};
 
 use crate::parsing::cli_args::parse_args_to_map;
+use crate::parsing::cli_preprocessor::preprocess;
 use crate::local::process_response;
 
 /// Fetch the spectrum for a remote prism
@@ -84,7 +85,7 @@ pub fn handle_remote(remote_url: &str, prism_name: &str, args: Vec<String>, outp
         .context("No frequency provided")?;
     
     // Parse the input arguments
-    let input = serde_json::Value::Object(parse_args_to_map(input_args));
+    let mut input = serde_json::Value::Object(parse_args_to_map(input_args));
     
     // Try to resolve prism name if it doesn't have a namespace
     let resolved_prism = resolve_prism_name(remote_url, prism_name)?;
@@ -95,6 +96,9 @@ pub fn handle_remote(remote_url: &str, prism_name: &str, args: Vec<String>, outp
     // Find the wavelength for the requested frequency
     let wavelength = spectrum.find_wavelength(frequency)
         .ok_or_else(|| anyhow::format_err!("No wavelength found for frequency '{}' in prism '{}'", frequency, resolved_prism))?;
+    
+    // Preprocess the input based on the wavelength schema
+    input = preprocess(input, &wavelength.input)?;
     
     // Now make the actual request
     let multiplexer = PrismMultiplexer::new();
