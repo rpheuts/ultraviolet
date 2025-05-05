@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     if args.len() == 2 && (args[1] == "--help" || args[1] == "-h") {
         return rendering::cli_help::render_global_help();
     }
-    
+
     // Parse command line arguments
     let args = match_cli_input()?;
     let debug = args.get_flag("debug");
