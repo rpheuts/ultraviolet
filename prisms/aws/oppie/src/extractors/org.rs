@@ -25,20 +25,15 @@ impl<'a> OrgExtractor<'a> {
     }
     
     /// Process multiple users at once.
-    pub fn process_users<W: ExtractorWriter>(&self, users: Vec<String>, writer: &mut W) -> Result<Value> {
-        if users.is_empty() {
-            return Ok(json!({}));
-        }
-
+    pub fn process_user<W: ExtractorWriter>(&self, user: &str, writer: &mut W) -> Result<Value> {
         // Process first user
-        let first_user = &users[0];
-        writer.write_progress(&format!("Processing first user: {}", first_user), Some("org"), Some(first_user))?;
+        writer.write_progress(&format!("Processing user: {}", user), Some("org"), Some(&user))?;
 
         let response = self.multiplexer.refract_and_absorb::<HttpResponse>(
             "curl.get",
             self.spectrum,
             json!({
-                "url": format!("https://phonetool.amazon.com/users/{}/setup_org_chart.json", first_user),
+                "url": format!("https://phonetool.amazon.com/users/{}/setup_org_chart.json", user),
                 "headers": {
                     "referer": "https://phonetool.amazon.com/",
                     "accept": "*/*"
@@ -52,7 +47,7 @@ impl<'a> OrgExtractor<'a> {
 
         let mut result = None;
 
-        // Find level 2 item for first user
+        // Find level 2 item for user
         if let Some(results) = data.get("results").and_then(|v| v.as_array()) {
             for item in results {
                 if let (Some(level), Some(user)) = (
@@ -81,64 +76,7 @@ impl<'a> OrgExtractor<'a> {
             }
         }
 
-        let mut result = result.unwrap_or_else(|| json!({}));
-
-        // Process additional users
-        for user in users.iter().skip(1) {
-            writer.write_progress(&format!("Processing additional user: {}", user), Some("org"), Some(user))?;
-
-            let response = self.multiplexer.refract_and_absorb::<HttpResponse>(
-                "curl.get",
-                self.spectrum,
-                json!({
-                    "url": format!("https://phonetool.amazon.com/users/{}/setup_org_chart.json", user),
-                    "headers": {
-                        "referer": "https://phonetool.amazon.com/",
-                        "accept": "*/*"
-                    }
-                }),
-            )?;
-
-            // Parse JSON response
-            let data: Value = serde_json::from_str(&response.body)
-                .map_err(|e| UVError::ExecutionError(format!("Failed to parse org chart response: {}", e)))?;
-
-            // Find level 2 items for additional users
-            if let Some(results) = data.get("results").and_then(|v| v.as_array()) {
-                for item in results {
-                    if let (Some(level), Some(user)) = (
-                        item.get("level").and_then(|v| v.as_i64()),
-                        item.get("user")
-                    ) {
-                        if level == 2 {
-                            let mut user_data = user.clone();
-                            if let Some(obj) = user_data.as_object_mut() {
-                                obj.insert("reports".to_string(), json!([]));
-
-                                // Process direct reports if any
-                                if let Some(direct_reports) = user.get("direct_reports").and_then(|v| v.as_i64()) {
-                                    if direct_reports > 0 {
-                                        if let Some(username) = user.get("login").and_then(|v| v.as_str()) {
-                                            let reports = self.process_reports(username, writer)?;
-                                            obj.insert("reports".to_string(), json!(reports));
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Add to first user's reports
-                            if let Some(obj) = result.as_object_mut() {
-                                if let Some(reports) = obj.get_mut("reports").and_then(|v| v.as_array_mut()) {
-                                    reports.push(user_data);
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
+        let result = result.unwrap_or_else(|| json!({}));
         Ok(result)
     }
     
@@ -204,6 +142,6 @@ impl<'a> OrgExtractor<'a> {
 impl<'a> Extractor for OrgExtractor<'a> {
     fn process_user<W: ExtractorWriter>(&self, user: &str, writer: &mut W) -> Result<Value> {
         // Process a single user by wrapping it in a vector
-        self.process_users(vec![user.to_string()], writer)
+        self.process_user(user, writer)
     }
 }

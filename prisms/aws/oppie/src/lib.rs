@@ -164,17 +164,17 @@ impl OppiePrism {
                 fs::write(&asr_file, serde_json::to_string_pretty(&asr_result)?)
                     .map_err(|e| UVError::ExecutionError(format!("Failed to write ASR data: {}", e)))?;
             }
-        }
-        
-        // Process Org data if requested (one file for all users)
+
+                    // Process Org data if requested (one file for all users)
         if services.contains(&"org".to_string()) {
             let org_extractor = OrgExtractor::new(&self.multiplexer, spectrum);
-            let org_result = org_extractor.process_users(users.clone(), &mut writer)?;
+            let org_result = org_extractor.process_user(user, &mut writer)?;
             
             // Save Org data
-            let org_file = data_dir.join("org.json"); // One file for all users
+            let org_file = data_dir.join(format!("{}_org.json", user)); // One file for all users
             fs::write(&org_file, serde_json::to_string_pretty(&org_result)?)
                 .map_err(|e| UVError::ExecutionError(format!("Failed to write Org data: {}", e)))?;
+        }
         }
         
         // Process FUA data if requested and fleet_id provided
@@ -264,20 +264,19 @@ impl OppiePrism {
                     uploaded.push(format!("asr for {}", user));
                 }
             }
-        }
-        
-        // Upload Org data if requested (one file for all users)
-        if services.contains(&"org".to_string()) {
-            let file = data_dir.join("org.json");
-            if file.exists() {
-                // Use first user as org for org data
-                if let Some(first_user) = users.first() {
-                    self.upload_file(&file, "oppie.org", first_user, &mut writer)?;
-                    uploaded.push("org".to_string());
+
+            // Upload Org data if requested (one file for all users)
+            if services.contains(&"org".to_string()) {
+                let file = data_dir.join(format!("{}_org.json", user));
+                if file.exists() {
+                    // Use first user as org for org data
+                    self.upload_file(&file, "oppie.org", user, &mut writer)?;
+                    uploaded.push(format!("org for {}", user));
                 }
             }
-        }
         
+        }
+    
         // Upload FUA data if requested and fleet_id provided
         if services.contains(&"fua".to_string()) {
             if let Some(fleet_id) = &input.fleet_id {
