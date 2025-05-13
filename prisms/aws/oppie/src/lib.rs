@@ -275,16 +275,12 @@ impl OppiePrism {
                 }
             }
         
-        }
-    
-        // Upload FUA data if requested and fleet_id provided
-        if services.contains(&"fua".to_string()) {
-            if let Some(fleet_id) = &input.fleet_id {
-                let file = data_dir.join(format!("{}_fua.json", fleet_id));
-                if file.exists() {
-                    // Use first user as org for FUA data
-                    if let Some(first_user) = users.first() {
-                        self.upload_file(&file, "oppie.fua", first_user, &mut writer)?;
+            // Upload FUA data if requested and fleet_id provided
+            if services.contains(&"fua".to_string()) {
+                if let Some(fleet_id) = &input.fleet_id {
+                    let file = data_dir.join(format!("{}_fua.json", fleet_id));
+                    if file.exists() {
+                        self.upload_file(&file, "oppie.fua", user, &mut writer)?;
                         uploaded.push(format!("fua for fleet {}", fleet_id));
                     }
                 }
