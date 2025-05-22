@@ -41,7 +41,7 @@ function ChatView({ connectionManager }) {
   const [error, setError] = useState(null);
   const [contextFiles, setContextFiles] = useState([]);
   const [filesPanelOpen, setFilesPanelOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("us.anthropic.claude-3-7-sonnet-20250219-v1:0");
+  const [selectedModel, setSelectedModel] = useState("us.anthropic.claude-sonnet-4-20250514-v1:0");
   const [showReasoning, setShowReasoning] = useState(true);
   const messagesEndRef = useRef(null);
   const chatServiceRef = useRef(null);
@@ -426,8 +426,10 @@ function ChatView({ connectionManager }) {
               }}
               label="Model"
             >
-              <MenuItem value="us.anthropic.claude-3-7-sonnet-20250219-v1:0">Claude 3.7</MenuItem>
-              <MenuItem value="us.anthropic.claude-3-5-sonnet-20241022-v2:0">Claude 3.5</MenuItem>
+              <MenuItem value="us.anthropic.claude-sonnet-4-20250514-v1:0">Claude Sonnet 4.0</MenuItem>
+              <MenuItem value="us.anthropic.claude-opus-4-20250514-v1:0">Claude Opus 4.0</MenuItem>
+              <MenuItem value="us.anthropic.claude-3-7-sonnet-20250219-v1:0">Claude Sonnet 3.7</MenuItem>
+              <MenuItem value="us.anthropic.claude-3-5-sonnet-20241022-v2:0">Claude Sonnet 3.5</MenuItem>
               <MenuItem value="us.deepseek.r1-v1:0">DeepSeek R1</MenuItem>
               <MenuItem value="us.meta.llama3-1-405b-instruct-v1:0">Llama 3</MenuItem>
               <MenuItem value="us.amazon.nova-pro-v1:0">AWS Nova</MenuItem>
