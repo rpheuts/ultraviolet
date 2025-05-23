@@ -56,8 +56,14 @@ pub fn match_cli_input() -> Result<ArgMatches> {
             )
             .arg(
                 Arg::new("static")
-                    .long("no_static")
+                    .long("no-static")
                     .help("Don't host the static files")
+                    .action(ArgAction::SetFalse)
+            )
+            .arg(
+                Arg::new("browser")
+                    .long("no-browser")
+                    .help("Don't attempt to open a browser window")
                     .action(ArgAction::SetFalse)
             )
         )

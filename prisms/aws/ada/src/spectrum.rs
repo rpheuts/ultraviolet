@@ -5,6 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub const DEFAULT_REGION: &str = "us-west-2";
+
 // Common types and refraction types
 
 /// Response from the curl prism
@@ -18,6 +20,24 @@ pub struct HttpResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
     pub token: String,
+}
+
+// Default functions for the deploy frequency
+
+fn default_region() -> String {
+    "us-east-1".to_string()
+}
+
+fn default_docker_image() -> String {
+    "rpheuts/ultraviolet:tailscale".to_string()
+}
+
+fn default_cpu() -> String {
+    "1024".to_string()  // 1 vCPU
+}
+
+fn default_memory() -> String {
+    "2048".to_string()  // 2 GB
 }
 
 // Credentials frequency
@@ -94,4 +114,30 @@ fn default_account() -> String {
 pub struct AdminOutput {
     pub success: bool,
     pub message: String,
+}
+
+// Deploy frequency
+
+/// Input for the deploy frequency
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeployInput {
+    pub account: String,
+    pub tailscale_authkey: String,
+    #[serde(default = "default_region")]
+    pub region: String,
+    #[serde(default = "default_docker_image")]
+    pub docker_image: String,
+    #[serde(default = "default_cpu")]
+    pub cpu: String,
+    #[serde(default = "default_memory")]
+    pub memory: String,
+}
+
+/// Output from the deploy frequency
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeployOutput {
+    pub success: bool,
+    pub message: String,
+    pub task_arn: Option<String>,
+    pub public_ip: Option<String>,
 }

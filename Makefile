@@ -38,7 +38,7 @@ run-base: image-base
 
 # Run the Tailscale-enabled Docker image
 # Note: Requires TS_AUTHKEY environment variable to be set for Tailscale authentication
-run-tailscale: image-tailscale
+run-tailscale: #image-tailscale
 	@echo "Running Tailscale-enabled Docker image on port $(DOCKER_PORT)"
 	docker run --rm -p $(DOCKER_PORT):3000 --name uv-server-ts \
 		-e HOME="/home/uvuser" \

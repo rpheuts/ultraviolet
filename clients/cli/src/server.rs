@@ -3,7 +3,7 @@ use anyhow::Result;
 use uv_core::UVError;
 use uv_service::{start_service, ServiceOptions};
 
-pub async fn handle_server(bind_address: SocketAddr, server_static: bool, debug: bool) -> Result<()> {
+pub async fn handle_server(bind_address: SocketAddr, server_static: bool, browser: bool, debug: bool) -> Result<()> {
     let log_level = if debug {
         uv_service::LogLevel::Debug
     } else {
@@ -21,7 +21,7 @@ pub async fn handle_server(bind_address: SocketAddr, server_static: bool, debug:
         log_level,
     };
 
-    if server_static {
+    if server_static && browser {
         open::that(format!("http://{}", options.bind_address))?;
     }
     

@@ -5,6 +5,32 @@
   "description": "AWS Ada credentials management",
   "wavelengths": [
     {
+      "frequency": "deploy",
+      "description": "Deploy Ultraviolet server to ECS Fargate with Tailscale",
+      "input": {
+        "type": "object",
+        "properties": {
+          "account": {"type": "string"},
+          "tailscale_authkey": {"type": "string"},
+          "region": {"type": "string"},
+          "docker_image": {"type": "string"},
+          "cpu": {"type": "string"},
+          "memory": {"type": "string"}
+        },
+        "required": ["account", "tailscale_authkey"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "message": {"type": "string"},
+          "task_arn": {"type": "string"},
+          "public_ip": {"type": "string"}
+        },
+        "required": ["success", "message"]
+      }
+    },
+    {
       "frequency": "credentials",
       "description": "Update AWS credentials for an account",
       "input": {

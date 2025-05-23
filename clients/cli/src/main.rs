@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
                 .get_one::<String>("address")
                 .expect("No address and port specified");
 
-            handle_server(bind_address.parse()?, sync_matches.get_flag("static"), debug).await?;
+            handle_server(bind_address.parse()?, sync_matches.get_flag("static"), sync_matches.get_flag("browser"), debug).await?;
         },
         Some(("chat", chat_matches)) => {
             let model = chat_matches.get_one::<String>("model")

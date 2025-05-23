@@ -6,6 +6,7 @@
 pub mod spectrum;
 
 use serde_json::json;
+use spectrum::DEFAULT_REGION;
 use std::fs::{self, File};
 use std::io::Read;
 use std::process::Command;
@@ -17,7 +18,7 @@ use uv_core::{
 
 use crate::spectrum::{
     AdminInput, AdminOutput, CredentialsInput, CredentialsOutput,
-    ProvisionInput, ProvisionOutput };
+    ProvisionInput, ProvisionOutput, DeployInput, DeployOutput };
 
 /// Ada prism for AWS credentials management
 pub struct AdaPrism {
@@ -119,8 +120,8 @@ impl AdaPrism {
         // Run the async AWS operations in the runtime
         let result: std::result::Result<ProvisionOutput, String> = runtime.block_on(async {
             // Load AWS config from environment/credentials
-            let config = aws_config::from_env()
-                .region("us-east-1")
+            let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region(aws_config::Region::new(DEFAULT_REGION))
                 .load()
                 .await;
                 
@@ -167,6 +168,14 @@ impl AdaPrism {
                             "sts:SetSourceIdentity",
                             "sts:TagSession"
                         ]
+                    },
+                    {
+                        "Sid": "AllowECSToAssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ecs-tasks.amazonaws.com"
+                        },
+                        "Action": "sts:AssumeRole"
                     }
                 ]
             });
@@ -253,9 +262,8 @@ impl AdaPrism {
         // Execute the AWS operations
         let result: std::result::Result<AdminOutput, String> = runtime.block_on(async {
             // Load broker-admin profile
-            let broker_config = aws_config::from_env()
-                .profile_name("broker-admin")
-                .region("us-east-1")
+            let broker_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region(aws_config::Region::new(DEFAULT_REGION))
                 .load()
                 .await;
                 
@@ -308,9 +316,9 @@ impl AdaPrism {
             // Format new default profile
             let default_profile_content = format!(
                 "[default]\naws_access_key_id = {}\naws_secret_access_key = {}\naws_session_token = {}\n",
-                admin_credentials.access_key_id().unwrap_or_default(),
-                admin_credentials.secret_access_key().unwrap_or_default(),
-                admin_credentials.session_token().unwrap_or_default()
+                admin_credentials.access_key_id(),
+                admin_credentials.secret_access_key(),
+                admin_credentials.session_token()
             );
             
             // Parse and update the credentials file
@@ -380,6 +388,204 @@ impl AdaPrism {
         
         Ok(())
     }
+    
+    /// Handle deploy frequency to deploy UV server to ECS Fargate
+    fn handle_deploy(&self, id: Uuid, input: DeployInput, link: &UVLink) -> Result<()> {
+        // Create tokio runtime
+        let runtime = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                let output = DeployOutput {
+                    success: false,
+                    message: format!("Failed to create Tokio runtime: {}", e),
+                    task_arn: None,
+                    public_ip: None,
+                };
+                
+                link.emit_photon(id, serde_json::to_value(output)?)?;
+                link.emit_trap(id, None)?;
+                
+                return Ok(());
+            }
+        };
+        
+        // Execute the AWS operations
+        let result = runtime.block_on(async {
+            // First, assume the blue admin role to get credentials
+            let broker_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region(aws_config::Region::new(DEFAULT_REGION))
+                .load()
+                .await;
+            
+            let ecs_client = aws_sdk_ecs::Client::new(&broker_config);
+            
+            // Create or update ECS task definition
+            let task_def_resp = ecs_client.register_task_definition()
+                .family("ultraviolet-server")
+                .cpu(input.cpu.clone())
+                .memory(input.memory.clone())
+                .network_mode(aws_sdk_ecs::types::NetworkMode::Awsvpc)
+                .requires_compatibilities(aws_sdk_ecs::types::Compatibility::Fargate)
+                .execution_role_arn(format!("arn:aws:iam::{}:role/blueAdminAccess-DO-NOT-DELETE", input.account))
+                .task_role_arn(format!("arn:aws:iam::{}:role/blueAdminAccess-DO-NOT-DELETE", input.account))
+                .container_definitions(
+                    aws_sdk_ecs::types::ContainerDefinition::builder()
+                        .name("ultraviolet-server")
+                        .image(input.docker_image.clone())
+                        .essential(true)
+                        .port_mappings(
+                            aws_sdk_ecs::types::PortMapping::builder()
+                                .container_port(3000)
+                                .host_port(3000)
+                                .protocol(aws_sdk_ecs::types::TransportProtocol::Tcp)
+                                .build()
+                        )
+                        .environment(
+                            aws_sdk_ecs::types::KeyValuePair::builder()
+                                .name("HOME")
+                                .value("/home/uvuser")
+                                .build()
+                        )
+                        .environment(
+                            aws_sdk_ecs::types::KeyValuePair::builder()
+                                .name("TS_AUTHKEY")
+                                .value(input.tailscale_authkey.clone())
+                                .build()
+                        )
+                        .log_configuration(
+                            aws_sdk_ecs::types::LogConfiguration::builder()
+                                .log_driver(aws_sdk_ecs::types::LogDriver::Awslogs)
+                                // These should be specified as key-value pairs properly
+                                .options("awslogs-group", "ultraviolet-logs")
+                                .options("awslogs-region", &input.region)
+                                .options("awslogs-stream-prefix", "ultraviolet")
+                                .options("awslogs-create-group", "true")
+                                .build()
+                                .ok()
+                                .expect("")
+                        )
+                        .build()
+                )
+                .send()
+                .await;
+            
+            let task_def_arn = match task_def_resp {
+                Ok(resp) => resp.task_definition()
+                    .and_then(|td| td.task_definition_arn())
+                    .map(|arn| arn.to_string())
+                    .ok_or_else(|| "No task definition ARN in response".to_string())?,
+                Err(e) => return Err(format!("Failed to register task definition: {}", e.into_service_error())),
+            };
+            
+            // Create default cluster if it doesn't exist
+            let _ = ecs_client.create_cluster()
+                .cluster_name("ultraviolet-cluster")
+                .send()
+                .await;
+
+            // Fetch the Default VPC and subnet
+            let ec2_client = aws_sdk_ec2::Client::new(&broker_config);
+
+            // Get default VPC and subnets for task placement
+            let vpcs_result = ec2_client.describe_vpcs()
+            .filters(aws_sdk_ec2::types::Filter::builder()
+                .name("isDefault")
+                .values("true")
+                .build())
+            .send()
+            .await;
+
+            let default_vpc_id = match vpcs_result {
+            Ok(resp) => {
+                match resp.vpcs().first() {
+                    Some(vpc) => vpc.vpc_id().map(|id| id.to_string()),
+                    None => return Err("No default VPC found in the account".to_string()),
+                }
+            },
+            Err(e) => return Err(format!("Failed to describe VPCs: {:?}", e)),
+            };
+
+            // Get public subnets in the default VPC
+            let vpc_id = match default_vpc_id {
+                Some(id) => id,
+                None => return Err("Default VPC ID is missing".to_string()),
+            };
+
+            let subnets_result = ec2_client.describe_subnets()
+            .filters(aws_sdk_ec2::types::Filter::builder()
+                .name("vpc-id")
+                .values(vpc_id.clone())
+                .build())
+            .send()
+            .await;
+
+            let subnet_id = subnets_result
+                .map_err(|_| "Unable to find subnet".to_string())?
+                .subnets()
+                .first()
+                .map(|subnet| subnet.subnet_id())
+                .map(|id| id.expect("").to_string())
+                .ok_or_else(|| "No subnet ID found in default VPC".to_string())?;
+                        
+            // Run the task in Fargate
+            let run_task_resp = ecs_client.run_task()
+                .task_definition(task_def_arn.clone())
+                .cluster("ultraviolet-cluster")
+                .count(1)
+                .launch_type(aws_sdk_ecs::types::LaunchType::Fargate)
+                .network_configuration(
+                    aws_sdk_ecs::types::NetworkConfiguration::builder()
+                        .awsvpc_configuration(
+                            aws_sdk_ecs::types::AwsVpcConfiguration::builder()
+                                .subnets(subnet_id)  // This would need to be fetched dynamically
+                                .assign_public_ip(aws_sdk_ecs::types::AssignPublicIp::Enabled)
+                                .build()
+                                .expect("")
+                        )
+                        .build()
+                )
+                .send()
+                .await;
+            
+            let task_arn = match run_task_resp {
+                Ok(resp) => resp.tasks()
+                    .first()
+                    .expect("")
+                    .task_arn()
+                    .map(|v| v.to_string()),
+                Err(e) => return Err(format!("Failed to run task: {}", e.into_service_error())),
+            };
+            
+            Ok(DeployOutput {
+                success: true,
+                message: "Successfully deployed Ultraviolet server to ECS".to_string(),
+                task_arn,
+                public_ip: Some("Task starting, public IP will be available soon".to_string()),
+            })
+        });
+        
+        // Handle the result
+        match result {
+            Ok(output) => {
+                link.emit_photon(id, serde_json::to_value(output)?)?;
+            },
+            Err(e) => {
+                println!("{e}");
+                let output = DeployOutput {
+                    success: false,
+                    message: e,
+                    task_arn: None,
+                    public_ip: None,
+                };
+                link.emit_photon(id, serde_json::to_value(output)?)?;
+            },
+        }
+        
+        // Signal completion
+        link.emit_trap(id, None)?;
+        
+        Ok(())
+    }
 }
 
 impl UVPrism for AdaPrism {
@@ -404,6 +610,14 @@ impl UVPrism for AdaPrism {
                 "admin" => {
                     let input: AdminInput = serde_json::from_value(wavefront.input.clone())?;
                     self.handle_admin(id, input, link)?;
+                    return Ok(true);
+                },
+                "deploy" => {
+                    let input: DeployInput = serde_json::from_value(wavefront.input.clone())?;
+                    match self.handle_deploy(id, input, link) {
+                        Ok(_) => return Ok(true),
+                        Err(e) => println!("{e}"),
+                    }
                     return Ok(true);
                 },
                 _ => {
