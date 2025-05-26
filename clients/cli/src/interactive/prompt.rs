@@ -1,7 +1,9 @@
 //! Prompt rendering for the interactive CLI.
 
 use colored::Colorize;
-use crate::interactive::{context::{ExecutionContext, ModeType}, mode::CliMode};
+use crate::interactive::{context::{ExecutionContext, ModeType}};
+
+use super::modes::mode::CliMode;
 
 /// Render the interactive prompt based on the current context and mode
 #[allow(dead_code)]

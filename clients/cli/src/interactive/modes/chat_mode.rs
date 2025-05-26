@@ -11,9 +11,10 @@ use uv_core::{PrismMultiplexer, UVLink, UVPulse};
 
 use crate::interactive::{
     context::ExecutionContext,
-    mode_handler::{ModeHandler, CommandResult},
     prompt::{render_success, render_error, render_info},
 };
+
+use super::mode_handler::{CommandResult, ModeHandler};
 
 /// Represents a chat session with the AI
 pub struct ChatSession {

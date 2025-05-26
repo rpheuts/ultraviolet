@@ -5,7 +5,9 @@ use uuid::Uuid;
 use std::io::{self, Write};
 use uv_core::{PrismMultiplexer, UVPulse, UVSpectrum};
 
-use crate::interactive::{context::ExecutionContext, mode_handler::{CommandResult, ModeHandler}, prompt::{render_error, render_info, render_success}};
+use crate::interactive::{context::ExecutionContext, prompt::{render_error, render_info, render_success}};
+
+use super::mode_handler::{CommandResult, ModeHandler};
 
 pub struct ShellModeHandler;
 

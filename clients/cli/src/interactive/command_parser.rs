@@ -2,6 +2,8 @@
 
 use anyhow::{Result, anyhow};
 
+use super::modes::mode::CliMode;
+
 /// Represents a parsed command from user input
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParsedCommand {
@@ -57,7 +59,7 @@ impl PrismCommand {
 }
 
 /// Parse user input into a command
-pub fn parse_input(input: &str, mode: &crate::interactive::mode::CliMode) -> Result<ParsedCommand> {
+pub fn parse_input(input: &str, mode: &CliMode) -> Result<ParsedCommand> {
     let input = input.trim();
     
     // Handle empty input

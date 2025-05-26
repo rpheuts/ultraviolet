@@ -6,11 +6,10 @@ use colored::Colorize;
 
 use crate::interactive::{
     context::{ExecutionContext, ModeType},
-    mode_handler::{ModeHandler, CommandResult},
     prompt::{render_welcome, render_error, render_fancy_prompt},
 };
 
-use super::modes::{ChatModeHandler, PrismModeHandler, ShellModeHandler};
+use super::modes::{mode_handler::{CommandResult, ModeHandler}, ChatModeHandler, PrismModeHandler, ShellModeHandler};
 
 /// Main interactive CLI session
 pub struct InteractiveCli {

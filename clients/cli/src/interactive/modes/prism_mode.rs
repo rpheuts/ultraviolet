@@ -1,7 +1,9 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::interactive::{command_parser::{parse_input, ParsedCommand}, context::ExecutionContext, mode_handler::{CommandResult, ModeHandler}, prism_executor::execute_prism_command, prompt::render_error, ModeType};
+use crate::interactive::{command_parser::{parse_input, ParsedCommand}, context::ExecutionContext, prism_executor::execute_prism_command, prompt::render_error, ModeType};
+
+use super::{mode::CliMode, mode_handler::{CommandResult, ModeHandler}};
 
 pub struct PrismModeHandler;
 
@@ -23,9 +25,9 @@ impl ModeHandler for PrismModeHandler {
     fn handle_input(&mut self, input: &str, context: &mut ExecutionContext) -> Result<CommandResult> {
         // Parse input using the existing parser
         let cli_mode = match context.current_mode() {
-            ModeType::Prism => crate::interactive::mode::CliMode::Normal,
-            ModeType::Command => crate::interactive::mode::CliMode::Command,
-            ModeType::Chat => crate::interactive::mode::CliMode::Normal,
+            ModeType::Prism => CliMode::Normal,
+            ModeType::Command => CliMode::Command,
+            ModeType::Chat => CliMode::Normal,
         };
         match parse_input(input, &cli_mode) {
             Ok(ParsedCommand::Empty) => Ok(CommandResult::Handled),
