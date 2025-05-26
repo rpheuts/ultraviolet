@@ -6,12 +6,11 @@
 mod cli;
 mod context;
 mod command_parser;
-mod commands;
 mod prism_executor;
 mod prompt;
 mod mode;
 mod mode_handler;
-mod chat_mode;
+mod modes;
 
 pub use cli::{handle_interactive, handle_interactive_with_mode};
 pub use context::ModeType;

@@ -1,5 +1,4 @@
 //! Core interactive CLI implementation using the new mode-aware architecture.
-
 use anyhow::Result;
 use rustyline::{Editor, error::ReadlineError, Config};
 use std::collections::HashMap;
@@ -7,10 +6,11 @@ use colored::Colorize;
 
 use crate::interactive::{
     context::{ExecutionContext, ModeType},
-    mode_handler::{ModeHandler, CommandResult, PrismModeHandler, CommandModeHandler},
-    chat_mode::ChatModeHandler,
-    prompt::{render_welcome, render_error},
+    mode_handler::{ModeHandler, CommandResult},
+    prompt::{render_welcome, render_error, render_fancy_prompt},
 };
+
+use super::modes::{ChatModeHandler, PrismModeHandler, ShellModeHandler};
 
 /// Main interactive CLI session
 pub struct InteractiveCli {
@@ -42,7 +42,7 @@ impl InteractiveCli {
         
         // Register built-in mode handlers
         cli.register_mode_handler(ModeType::Prism, Box::new(PrismModeHandler::new()));
-        cli.register_mode_handler(ModeType::Command, Box::new(CommandModeHandler::new()));
+        cli.register_mode_handler(ModeType::Command, Box::new(ShellModeHandler::new()));
         cli.register_mode_handler(ModeType::Chat, Box::new(ChatModeHandler::new()));
         
         Ok(cli)
@@ -126,7 +126,7 @@ impl InteractiveCli {
     
     /// Get user input using rustyline with mode-aware prompt
     fn get_user_input(&mut self) -> Result<String> {
-        let prompt = format!("[{}]> ", self.context.full_display_name());
+        let prompt = render_fancy_prompt(&self.context);
         
         match self.editor.readline(&prompt) {
             Ok(line) => {
@@ -154,7 +154,7 @@ impl InteractiveCli {
     /// Returns Some(Some(mode)) for mode switch, Some(None) for exit, None for not a global command
     fn check_mode_switch(&self, input: &str) -> Option<Option<ModeType>> {
         match input {
-            "/cmd" => Some(Some(ModeType::Command)),
+            "/shell" => Some(Some(ModeType::Command)),
             "/chat" => Some(Some(ModeType::Chat)),
             "/normal" => Some(Some(ModeType::Prism)),
             "/exit" => Some(None), // Signal exit

@@ -10,11 +10,6 @@ pub enum CliMode {
 }
 
 impl CliMode {
-    /// Check if the mode is normal
-    pub fn is_normal(&self) -> bool {
-        matches!(self, Self::Normal)
-    }
-    
     /// Check if the mode is command
     pub fn is_command(&self) -> bool {
         matches!(self, Self::Command)
