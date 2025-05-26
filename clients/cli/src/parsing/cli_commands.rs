@@ -36,7 +36,7 @@ pub fn match_cli_input() -> Result<ArgMatches> {
         .arg(
             Arg::new("remote")
                 .long("remote")
-                .help("WebSocket URL to a remote Ultraviolet server (e.g., ws://localhost:3000/ws)")
+                .help("WebSocket URL to a remote Ultraviolet server (e.g., ws://localhost:4000/ws)")
                 .action(ArgAction::Set)
                 .global(true)
         )
@@ -51,7 +51,7 @@ pub fn match_cli_input() -> Result<ArgMatches> {
                     .long("address")
                     .help("Local address and port to host UV on")
                     .action(ArgAction::Set)
-                    .default_value("127.0.0.1:3000")
+                    .default_value("127.0.0.1:4000")
                     .num_args(1),
             )
             .arg(
@@ -92,6 +92,10 @@ pub fn match_cli_input() -> Result<ArgMatches> {
                     .help("Add a file as context for the AI")
                     .action(ArgAction::Append)
             )
+        )
+        .subcommand(
+            Command::new("cli")
+            .about("Start an interactive CLI for executing UV prism commands")
         )
         .allow_external_subcommands(true)
         .get_matches())

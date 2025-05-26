@@ -1,0 +1,77 @@
+{
+  "name": "command",
+  "namespace": "core",
+  "version": "0.1.0",
+  "description": "Local command execution prism",
+  "wavelengths": [
+    {
+      "frequency": "exec",
+      "description": "Execute a command and return complete output",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "description": "Command to execute"},
+          "args": {"type": "array", "items": {"type": "string"}, "description": "Command arguments"},
+          "cwd": {"type": "string", "description": "Working directory (optional)"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Environment variables (optional)"},
+          "timeout_seconds": {"type": "integer", "description": "Command timeout in seconds (default: 60)"}
+        },
+        "required": ["command"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "stdout": {"type": "string"},
+          "stderr": {"type": "string"},
+          "exit_code": {"type": "integer"},
+          "success": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "frequency": "exec_stream",
+      "description": "Execute a command and stream output line by line",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "description": "Command to execute"},
+          "args": {"type": "array", "items": {"type": "string"}, "description": "Command arguments"},
+          "cwd": {"type": "string", "description": "Working directory (optional)"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Environment variables (optional)"},
+          "timeout_seconds": {"type": "integer", "description": "Command timeout in seconds (default: 60)"}
+        },
+        "required": ["command"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "line": {"type": "string", "description": "Single line of output"},
+          "source": {"type": "string", "description": "Source of the line (stdout, stderr, or system)"}
+        },
+        "x-uv-stream": "line"
+      }
+    },
+    {
+      "frequency": "shell_exec_stream",
+      "description": "Execute a shell command string and stream output line by line",
+      "input": {
+        "type": "object",
+        "properties": {
+          "shell_command": {"type": "string", "description": "Complete shell command string to execute"},
+          "cwd": {"type": "string", "description": "Working directory (optional)"},
+          "env": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Environment variables (optional)"},
+          "timeout_seconds": {"type": "integer", "description": "Command timeout in seconds (default: 60)"}
+        },
+        "required": ["shell_command"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "line": {"type": "string", "description": "Single line of output"},
+          "source": {"type": "string", "description": "Source of the line (stdout, stderr, or system)"}
+        },
+        "x-uv-stream": "line"
+      }
+    }
+  ]
+}

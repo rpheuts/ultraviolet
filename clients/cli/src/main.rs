@@ -4,6 +4,7 @@ mod remote;
 mod parsing;
 mod rendering;
 mod chat;
+mod interactive;
 
 use std::ffi::OsString;
 use anyhow::Result;
@@ -13,6 +14,7 @@ use server::handle_server;
 use local::handle_local;
 use remote::handle_remote;
 use chat::handle_chat;
+use interactive::handle_interactive;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -53,6 +55,9 @@ async fn main() -> Result<()> {
                 .collect();
             
             handle_chat(&model, max_tokens, context_files)?;
+        },
+        Some(("cli", _cli_matches)) => {
+            handle_interactive()?;
         },
         Some((external, sub_m)) => {
             let sub_args: Vec<String> = sub_m

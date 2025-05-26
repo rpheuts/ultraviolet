@@ -15,6 +15,7 @@ members = [
     "prisms/aws/governance",
     "prisms/aws/oppie",
     "prisms/core/bedrock",
+    "prisms/core/command",
     "prisms/system/discovery",
     "prisms/system/remote"
 ]
