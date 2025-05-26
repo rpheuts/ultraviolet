@@ -7,7 +7,8 @@ use colored::Colorize;
 
 use crate::interactive::{
     context::{ExecutionContext, ModeType},
-    mode_handler::{ModeHandler, CommandResult, PrismModeHandler, CommandModeHandler, ChatModeHandler},
+    mode_handler::{ModeHandler, CommandResult, PrismModeHandler, CommandModeHandler},
+    chat_mode::ChatModeHandler,
     prompt::{render_welcome, render_error},
 };
 
@@ -199,6 +200,11 @@ fn current_mode_name(mode: &ModeType) -> &'static str {
 
 /// Handle the interactive CLI command - main entry point
 pub fn handle_interactive() -> Result<()> {
+    handle_interactive_with_mode(None)
+}
+
+/// Handle the interactive CLI command with an optional initial mode
+pub fn handle_interactive_with_mode(initial_mode: Option<ModeType>) -> Result<()> {
     // Check if we're in a proper terminal environment
     if !atty::is(atty::Stream::Stdout) || !atty::is(atty::Stream::Stdin) {
         eprintln!("Error: Interactive CLI requires a proper terminal environment");
@@ -207,5 +213,21 @@ pub fn handle_interactive() -> Result<()> {
     }
     
     let mut cli = InteractiveCli::new()?;
+    
+    // If an initial mode is specified, switch to it immediately
+    if let Some(mode) = initial_mode {
+        // Exit the default mode (Prism)
+        let current_mode = cli.context.current_mode().clone();
+        if let Some(handler) = cli.mode_handlers.get_mut(&current_mode) {
+            let _ = handler.on_exit(&mut cli.context);
+        }
+        
+        // Enter the new mode
+        cli.context.enter_mode(mode.clone());
+        if let Some(handler) = cli.mode_handlers.get_mut(&mode) {
+            let _ = handler.on_enter(&mut cli.context);
+        }
+    }
+    
     cli.run()
 }

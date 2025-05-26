@@ -5,7 +5,6 @@ pub fn match_cli_input() -> Result<ArgMatches> {
     Ok(Command::new("uv")
         .about("Ultra-Violet CLI")
         .version("1.0.0")
-        .subcommand_required(true)
         .disable_help_flag(true)  // Disable built-in help
         .disable_help_subcommand(true)  // Disable built-in help subcommand
         .arg(
@@ -40,6 +39,14 @@ pub fn match_cli_input() -> Result<ArgMatches> {
                 .action(ArgAction::Set)
                 .global(true)
         )
+        .arg(
+            Arg::new("mode")
+                .long("mode")
+                .help("Start in a specific interactive mode (chat, cmd, normal)")
+                .action(ArgAction::Set)
+                .value_parser(clap::builder::PossibleValuesParser::new(["chat", "cmd", "normal"]))
+                .global(true)
+        )
         .subcommand(
             Command::new("server")
             .short_flag('s')
@@ -65,32 +72,6 @@ pub fn match_cli_input() -> Result<ArgMatches> {
                     .long("no-browser")
                     .help("Don't attempt to open a browser window")
                     .action(ArgAction::SetFalse)
-            )
-        )
-        .subcommand(
-            Command::new("chat")
-            .about("Start an interactive AI chat session using Bedrock LLMs")
-            .arg(
-                Arg::new("model")
-                    .short('m')
-                    .long("model")
-                    .help("Specify the LLM model to use")
-                    .action(ArgAction::Set)
-                    .default_value("us.anthropic.claude-3-7-sonnet-20250219-v1:0")
-            )
-            .arg(
-                Arg::new("max_tokens")
-                    .long("max-tokens")
-                    .help("Maximum number of tokens for the response")
-                    .action(ArgAction::Set)
-                    .default_value("4096")
-            )
-            .arg(
-                Arg::new("context_file")
-                    .short('c')
-                    .long("context")
-                    .help("Add a file as context for the AI")
-                    .action(ArgAction::Append)
             )
         )
         .subcommand(

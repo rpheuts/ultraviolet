@@ -11,5 +11,7 @@ mod prism_executor;
 mod prompt;
 mod mode;
 mod mode_handler;
+mod chat_mode;
 
-pub use cli::handle_interactive;
+pub use cli::{handle_interactive, handle_interactive_with_mode};
+pub use context::ModeType;

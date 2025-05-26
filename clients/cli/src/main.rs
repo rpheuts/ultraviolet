@@ -3,7 +3,6 @@ mod local;
 mod remote;
 mod parsing;
 mod rendering;
-mod chat;
 mod interactive;
 
 use std::ffi::OsString;
@@ -13,8 +12,7 @@ use parsing::cli_commands::match_cli_input;
 use server::handle_server;
 use local::handle_local;
 use remote::handle_remote;
-use chat::handle_chat;
-use interactive::handle_interactive;
+use interactive::{handle_interactive, handle_interactive_with_mode, ModeType};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -31,6 +29,16 @@ async fn main() -> Result<()> {
 
     init_tracing(debug);
 
+    // Check for --mode option to determine initial mode
+    let initial_mode = args.get_one::<String>("mode").map(|mode_str| {
+        match mode_str.as_str() {
+            "chat" => ModeType::Chat,
+            "cmd" => ModeType::Command,
+            "normal" => ModeType::Prism,
+            _ => ModeType::Prism, // Default fallback
+        }
+    });
+
     match args.subcommand() {
         Some(("server", sync_matches)) => {
             let bind_address: &String = sync_matches
@@ -39,25 +47,13 @@ async fn main() -> Result<()> {
 
             handle_server(bind_address.parse()?, sync_matches.get_flag("static"), sync_matches.get_flag("browser"), debug).await?;
         },
-        Some(("chat", chat_matches)) => {
-            let model = chat_matches.get_one::<String>("model")
-                .unwrap_or(&"us.anthropic.claude-3-7-sonnet-20250219-v1:0".to_string())
-                .to_string();
-            
-            let max_tokens = chat_matches.get_one::<String>("max_tokens")
-                .unwrap_or(&"4096".to_string())
-                .parse::<i32>()
-                .unwrap_or(4096);
-            
-            let context_files = chat_matches.get_many::<String>("context_file")
-                .unwrap_or_default()
-                .cloned()
-                .collect();
-            
-            handle_chat(&model, max_tokens, context_files)?;
-        },
         Some(("cli", _cli_matches)) => {
-            handle_interactive()?;
+            // Handle interactive CLI with optional mode
+            if let Some(mode) = initial_mode {
+                handle_interactive_with_mode(Some(mode))?;
+            } else {
+                handle_interactive()?;
+            }
         },
         Some((external, sub_m)) => {
             let sub_args: Vec<String> = sub_m
@@ -73,7 +69,14 @@ async fn main() -> Result<()> {
                 handle_local(external, sub_args, output)?;
             }
         }
-        _ => unreachable!()
+        None => {
+            // No subcommand provided - default to interactive mode
+            if let Some(mode) = initial_mode {
+                handle_interactive_with_mode(Some(mode))?;
+            } else {
+                handle_interactive()?;
+            }
+        }
     }
         
     Ok(())
