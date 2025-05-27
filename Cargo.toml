@@ -6,14 +6,6 @@ members = [
 
     "clients/cli",
 
-    "prisms/aws/curl",
-    "prisms/aws/ada",
-    "prisms/aws/burner",
-    "prisms/aws/cdk",
-    "prisms/aws/accounts",
-    "prisms/aws/cradle",
-    "prisms/aws/governance",
-    "prisms/aws/oppie",
     "prisms/core/bedrock",
     "prisms/core/command",
     "prisms/system/discovery",
