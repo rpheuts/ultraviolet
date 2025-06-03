@@ -78,7 +78,7 @@ function App() {
   
   // Initialize services on mount
   useEffect(() => {
-    connectionManagerRef.current = new ConnectionManager('ws://localhost:3000/ws');
+    connectionManagerRef.current = new ConnectionManager();
     prismDiscoveryRef.current = new PrismDiscovery(connectionManagerRef.current);
     
     // Set up connection listener
