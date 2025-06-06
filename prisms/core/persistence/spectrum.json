@@ -1,0 +1,61 @@
+{
+  "name": "persistence",
+  "namespace": "core",
+  "version": "0.1.0",
+  "description": "Content-aware persistence for UV Pulse data with support for text and photon storage modes",
+  "wavelengths": [
+    {
+      "frequency": "store",
+      "description": "Store photons with content-type aware formatting",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string", 
+            "description": "Relative file path for storage (e.g., 'cache/data.json')"
+          },
+          "content_type": {
+            "type": "string",
+            "description": "Content type for storage format (e.g., 'text/token', 'text/line', 'uv/photon')",
+            "default": "uv/photon"
+          }
+        },
+        "required": ["path"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "photons_stored": {"type": "integer"},
+          "bytes_written": {"type": "integer"},
+          "path": {"type": "string"},
+          "content_type": {"type": "string"},
+          "storage_mode": {"type": "string"}
+        }
+      }
+    },
+    {
+      "frequency": "load",
+      "description": "Load and stream data with content-type aware parsing",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Relative file path to load from (e.g., 'cache/data.json')"
+          },
+          "content_type": {
+            "type": "string",
+            "description": "Content type for parsing format (auto-detected if not specified)"
+          }
+        },
+        "required": ["path"]
+      },
+      "output": {
+        "type": "object",
+        "description": "Streams data according to the detected or specified content type",
+        "x-uv-stream": "uv/photon"
+      }
+    }
+  ]
+}

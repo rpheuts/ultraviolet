@@ -4,6 +4,7 @@ mod remote;
 mod parsing;
 mod rendering;
 mod interactive;
+mod persistence;
 
 use std::ffi::OsString;
 use anyhow::Result;
@@ -28,6 +29,33 @@ async fn main() -> Result<()> {
     let output = args.get_one::<String>("output");
 
     init_tracing(debug);
+
+    // Check for upload/download flags first
+    if let Some(upload_args) = args.get_many::<String>("upload") {
+        let upload_values: Vec<&String> = upload_args.collect();
+        if upload_values.len() == 2 {
+            let local_path = upload_values[0];
+            let remote_path = upload_values[1];
+            let remote_url = args.get_one::<String>("remote");
+            let content_type = args.get_one::<String>("content_type").map(|s| s.as_str()).unwrap_or("uv/photon");
+            return persistence::handle_upload(local_path, remote_path, remote_url.map(|s| s.as_str()), content_type);
+        } else {
+            return Err(anyhow::format_err!("Upload requires exactly 2 arguments: <local_path> <remote_path>"));
+        }
+    }
+
+    if let Some(download_args) = args.get_many::<String>("download") {
+        let download_values: Vec<&String> = download_args.collect();
+        if download_values.len() == 2 {
+            let remote_path = download_values[0];
+            let local_path = download_values[1];
+            let remote_url = args.get_one::<String>("remote");
+            let content_type = args.get_one::<String>("content_type").map(|s| s.as_str()).unwrap_or("uv/photon");
+            return persistence::handle_download(remote_path, local_path, remote_url.map(|s| s.as_str()), content_type);
+        } else {
+            return Err(anyhow::format_err!("Download requires exactly 2 arguments: <remote_path> <local_path>"));
+        }
+    }
 
     // Check for --mode option to determine initial mode
     let initial_mode = args.get_one::<String>("mode").map(|mode_str| {
