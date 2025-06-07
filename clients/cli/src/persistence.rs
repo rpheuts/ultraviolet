@@ -45,7 +45,7 @@ pub fn handle_upload(local_path: &str, remote_path: &str, remote_url: Option<&st
             .with_context(|| format!("Failed to read line from file: {}", local_path))?;
         
         // Send each line as a photon
-        let photon_data = json!({ "line": line });
+        let photon_data = json!({ "line": line + "\n" });
         link.emit_photon(request_id, photon_data)?;
         line_count += 1;
         
