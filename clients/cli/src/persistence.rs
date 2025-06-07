@@ -14,8 +14,6 @@ use uv_core::{PrismMultiplexer, UVLink, UVPulse};
 
 /// Upload a local text file to remote storage via the persistence prism
 pub fn handle_upload(local_path: &str, remote_path: &str, remote_url: Option<&str>, content_type: &str) -> Result<()> {
-    println!("📤 Uploading {} to {}", local_path, remote_path);
-    
     // Check if local file exists
     if !Path::new(local_path).exists() {
         return Err(anyhow::format_err!("Local file not found: {}", local_path));
@@ -39,7 +37,6 @@ pub fn handle_upload(local_path: &str, remote_path: &str, remote_url: Option<&st
         .with_context(|| format!("Failed to open file: {}", local_path))?;
     let reader = BufReader::new(file);
     
-    let mut line_count = 0;
     for line_result in reader.lines() {
         let line = line_result
             .with_context(|| format!("Failed to read line from file: {}", local_path))?;
@@ -47,20 +44,10 @@ pub fn handle_upload(local_path: &str, remote_path: &str, remote_url: Option<&st
         // Send each line as a photon
         let photon_data = json!({ "line": line + "\n" });
         link.emit_photon(request_id, photon_data)?;
-        line_count += 1;
-        
-        // Show progress every 100 lines
-        if line_count % 100 == 0 {
-            print!("\r📤 Uploaded {} lines...", line_count);
-            std::io::stdout().flush().unwrap();
-        }
     }
     
     // Send completion trap
     link.emit_trap(request_id, None)?;
-    
-    // Wait for store response
-    println!("\r📤 Uploaded {} lines, waiting for confirmation...", line_count);
     
     loop {
         match link.receive()? {
@@ -69,15 +56,10 @@ pub fn handle_upload(local_path: &str, remote_path: &str, remote_url: Option<&st
                     UVPulse::Photon(photon) => {
                         if let Some(success) = photon.data.get("success").and_then(|v| v.as_bool()) {
                             if success {
-                                let stored_count = photon.data.get("photons_stored")
-                                    .and_then(|v| v.as_u64()).unwrap_or(0);
                                 let bytes_written = photon.data.get("bytes_written")
                                     .and_then(|v| v.as_u64()).unwrap_or(0);
                                 
-                                println!("✅ Upload successful!");
-                                println!("   Lines stored: {}", stored_count);
-                                println!("   Bytes written: {}", bytes_written);
-                                println!("   Remote path: {}", remote_path);
+                                println!("Upload successful ({}kb written)", bytes_written/ 1000);
                                 return Ok(());
                             }
                         }
@@ -101,8 +83,6 @@ pub fn handle_upload(local_path: &str, remote_path: &str, remote_url: Option<&st
 
 /// Download a remote file to local storage via the persistence prism
 pub fn handle_download(remote_path: &str, local_path: &str, remote_url: Option<&str>, content_type: &str) -> Result<()> {
-    println!("📥 Downloading {} to {}", remote_path, local_path);
-    
     // Get the link to the persistence prism
     let link = get_persistence_link(remote_url)?;
     
@@ -120,7 +100,6 @@ pub fn handle_download(remote_path: &str, local_path: &str, remote_url: Option<&
     let mut file = File::create(local_path)
         .with_context(|| format!("Failed to create local file: {}", local_path))?;
     
-    let mut line_count = 0;
     let mut download_complete = false;
     
     // Collect the streaming photons and write to file
@@ -132,13 +111,6 @@ pub fn handle_download(remote_path: &str, local_path: &str, remote_url: Option<&
                         if let Some(line) = photon.data.get("line").and_then(|v| v.as_str()) {
                             writeln!(file, "{}", line)
                                 .with_context(|| format!("Failed to write to file: {}", local_path))?;
-                            line_count += 1;
-                            
-                            // Show progress every 100 lines
-                            if line_count % 100 == 0 {
-                                print!("\r📥 Downloaded {} lines...", line_count);
-                                std::io::stdout().flush().unwrap();
-                            }
                         }
                     },
                     UVPulse::Trap(trap) => {
@@ -159,9 +131,7 @@ pub fn handle_download(remote_path: &str, local_path: &str, remote_url: Option<&
     file.flush()
         .with_context(|| format!("Failed to flush file: {}", local_path))?;
     
-    println!("\r✅ Download successful!");
-    println!("   Lines downloaded: {}", line_count);
-    println!("   Local path: {}", local_path);
+    println!("Download successful!");
     
     Ok(())
 }
