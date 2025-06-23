@@ -14,8 +14,14 @@ install: build
 build-web:
 	@scripts/build-web.sh
 
+build-lambda-package:
+	@scripts/build-lambda-package.sh
+
 install-web: build-web
 	@echo "Web client installed to ~/.uv/assets/web"
+
+install-lambda-package: build-lambda-package
+	@echo "Lambda package installed to ~/.uv/prisms/system/deploy/lambda/package.zip"
 
 # Build the base Docker image
 image-base:

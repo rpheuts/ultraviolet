@@ -1,0 +1,72 @@
+{
+  "name": "deploy",
+  "namespace": "system",
+  "version": "0.1.0",
+  "description": "Deployment tools for UV",
+  "wavelengths": [
+    {
+      "frequency": "lambda",
+      "description": "Deploy UV to AWS Lambda with WebSocket API Gateway",
+      "input": {
+        "type": "object",
+        "properties": {
+          "functionName": {
+            "type": "string",
+            "description": "Lambda function name",
+            "default": "ultraviolet-service"
+          },
+          "region": {
+            "type": "string",
+            "description": "AWS region",
+            "default": "us-west-2"
+          },
+          "memorySize": {
+            "type": "integer",
+            "description": "Lambda memory in MB",
+            "default": 256,
+            "minimum": 128,
+            "maximum": 10240
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Lambda timeout in seconds",
+            "default": 30,
+            "minimum": 1,
+            "maximum": 900
+          },
+          "stageName": {
+            "type": "string",
+            "description": "API Gateway stage name",
+            "default": "prod"
+          }
+        },
+        "required": ["functionName"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "functionArn": {
+            "type": "string",
+            "description": "ARN of the deployed Lambda function"
+          },
+          "apiId": {
+            "type": "string",
+            "description": "ID of the API Gateway WebSocket API"
+          },
+          "websocketUrl": {
+            "type": "string",
+            "description": "WebSocket URL for clients to connect to"
+          },
+          "deploymentTime": {
+            "type": "string",
+            "description": "ISO timestamp of deployment"
+          },
+          "status": {
+            "type": "string",
+            "description": "Deployment status"
+          }
+        }
+      }
+    }
+  ]
+}

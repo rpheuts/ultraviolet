@@ -5,12 +5,17 @@ members = [
     "uv-service",
 
     "clients/cli",
+    "clients/lambda",
 
     "prisms/core/bedrock",
+    "prisms/core/q",
     "prisms/core/command",
     "prisms/core/persistence",
     "prisms/system/discovery",
-    "prisms/system/remote"
+    "prisms/system/remote",
+    "prisms/system/deploy",
+    "prisms/ai/context",
+    "prisms/ai/agent",
 ]
 
 [workspace.dependencies]

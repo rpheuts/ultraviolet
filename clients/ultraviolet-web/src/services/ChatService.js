@@ -1,5 +1,5 @@
 /**
- * ChatService manages conversation state and communication with the bedrock prism
+ * ChatService manages conversation state and communication with AI prisms (bedrock, q, etc.)
  */
 class ChatService {
   /**
@@ -8,7 +8,7 @@ class ChatService {
    */
   constructor(connectionManager) {
     this.connectionManager = connectionManager;
-    this.prismId = 'core:bedrock'; // Bedrock prism ID
+    this.prismId = 'core:bedrock'; // Default to Bedrock prism
     this.model = null; // Default model (null means use server default)
     this.maxTokens = 4096; // Default max tokens
   }
@@ -19,6 +19,14 @@ class ChatService {
    */
   setModel(model) {
     this.model = model;
+  }
+
+  /**
+   * Set the prism backend to use (e.g., 'core:bedrock', 'core:q')
+   * @param {string} prismId - Prism ID
+   */
+  setPrism(prismId) {
+    this.prismId = prismId;
   }
 
   /**

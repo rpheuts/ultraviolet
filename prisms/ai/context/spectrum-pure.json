@@ -1,0 +1,44 @@
+{
+  "name": "context",
+  "namespace": "ai",
+  "version": "0.2.0",
+  "description": "Pure AI context prism - enriches prompts with UV system context",
+  "wavelengths": [
+    {
+      "frequency": "prepare",
+      "description": "Prepare enriched prompt with UV system context",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string", 
+            "description": "User's natural language prompt"
+          },
+          "include_examples": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to include usage examples in context"
+          },
+          "prism_filter": {
+            "type": "string",
+            "description": "Optional regex filter for which prisms to include"
+          }
+        },
+        "required": ["prompt"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "enriched_prompt": {
+            "type": "string",
+            "description": "Prompt enriched with UV system context"
+          },
+          "context_info": {
+            "type": "object",
+            "description": "Metadata about the context that was added"
+          }
+        }
+      }
+    }
+  ]
+}

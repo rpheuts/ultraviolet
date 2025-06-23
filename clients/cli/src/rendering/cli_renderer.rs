@@ -40,8 +40,17 @@ pub fn render_object(value: &Value, schema: &UVSchemaDefinition, output: Option<
     }
 }
 
-pub fn render_stream(stream_type: &String, value: &Value, schema: &UVSchemaDefinition) -> Result<()> {
-    schema.validate(value)?;
+pub fn render_stream(stream_type: &String, value: &Value, schema: &UVSchemaDefinition, output: Option<&String>) -> Result<()> {
+   schema.validate(value)?;
 
-    render_cli_stream(stream_type, value, schema)
+    match output {
+        Some(style) => {
+            match style.as_str() {
+                "raw" => render_raw_object(value),
+                _ => render_cli_stream(stream_type, value, schema)
+            }
+        },
+        None => render_cli_stream(stream_type, value, schema),
+    }
+
 }

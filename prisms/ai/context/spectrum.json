@@ -1,0 +1,82 @@
+{
+  "name": "context",
+  "namespace": "ai",
+  "version": "0.1.0",
+  "description": "Enrich user prompts with UV system context and get AI responses",
+  "wavelengths": [
+    {
+      "frequency": "chat",
+      "description": "Process user prompt with UV context and stream AI response",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string", 
+            "description": "User's natural language prompt"
+          },
+          "model": {
+            "type": "string", 
+            "description": "Optional AI model override"
+          },
+          "include_examples": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to include usage examples in context"
+          },
+          "prism_filter": {
+            "type": "string",
+            "description": "Optional regex filter for which prisms to include"
+          }
+        },
+        "required": ["prompt"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string", 
+            "description": "Single token from AI response"
+          }
+        },
+        "x-uv-stream": "token"
+      }
+    }
+  ],
+  "refractions": [
+    {
+      "name": "discovery.list",
+      "target": "system:discovery", 
+      "frequency": "list",
+      "transpose": {
+        "filter": "filter?"
+      },
+      "reflection": {
+        "prisms": "prisms"
+      }
+    },
+    {
+      "name": "discovery.describe",
+      "target": "system:discovery",
+      "frequency": "describe", 
+      "transpose": {
+        "prismId": "prismId"
+      },
+      "reflection": {
+        "spectrum": "spectrum"
+      }
+    },
+    {
+      "name": "bedrock.invoke_stream",
+      "target": "core:bedrock",
+      "frequency": "invoke_stream",
+      "transpose": {
+        "model": "model?",
+        "prompt": "prompt",
+        "max_tokens": "max_tokens?"
+      },
+      "reflection": {
+        "token": "token"
+      }
+    }
+  ]
+}

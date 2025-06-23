@@ -1,0 +1,20 @@
+[package]
+name = "uv_prism_system_deploy"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1.0", features = ["v4"] }
+tracing = "0.1"
+aws-config = "1.0"
+aws-sdk-lambda = "1.0"
+aws-sdk-apigatewayv2 = "1.0"
+aws-sdk-iam = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uv-core = { path = "../../../uv-core" }

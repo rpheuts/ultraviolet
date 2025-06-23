@@ -1,0 +1,147 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: UV Lambda WebSocket API
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+
+Resources:
+  # WebSocket API
+  UVWebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: UVWebSocketApi
+      Description: UV Lambda WebSocket API
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  # Lambda function
+  UVFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: bootstrap
+      Description: UV Lambda WebSocket handler
+      Environment:
+        Variables:
+          RUST_LOG: info
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - 'execute-api:ManageConnections'
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UVWebSocketApi}/*'
+
+  # Lambda permissions for API Gateway
+  UVFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - UVWebSocketApi
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UVFunction
+      Principal: apigateway.amazonaws.com
+
+  # Routes and integrations
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref UVWebSocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref ConnectInteg
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref UVWebSocketApi
+      RouteKey: $default
+      AuthorizationType: NONE
+      OperationName: DefaultRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref DefaultInteg
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref UVWebSocketApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref DisconnectInteg
+
+  # Integrations
+  ConnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref UVWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: 
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UVFunction.Arn}/invocations
+
+  DefaultInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref UVWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: 
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UVFunction.Arn}/invocations
+
+  DisconnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref UVWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: 
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UVFunction.Arn}/invocations
+
+  # Deployment and stage
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - DefaultRoute
+      - DisconnectRoute
+    Properties:
+      ApiId: !Ref UVWebSocketApi
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: prod
+      Description: Production Stage
+      DeploymentId: !Ref Deployment
+      ApiId: !Ref UVWebSocketApi
+      DefaultRouteSettings:
+        LoggingLevel: INFO
+        DataTraceEnabled: true
+        DetailedMetricsEnabled: true
+
+Outputs:
+  WebSocketURI:
+    Description: "WebSocket endpoint URL for Prod stage"
+    Value: !Sub "wss://${UVWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Export:
+      Name: !Sub "${AWS::StackName}-WebSocketURI"
+  
+  LambdaFunctionArn:
+    Description: "UV Lambda Function ARN"
+    Value: !GetAtt UVFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaArn"

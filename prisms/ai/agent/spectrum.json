@@ -1,0 +1,72 @@
+{
+  "name": "agent",
+  "namespace": "ai",
+  "version": "0.1.0",
+  "description": "AI agent that plans and executes actions using UV prisms",
+  "wavelengths": [
+    {
+      "frequency": "execute",
+      "description": "Execute user prompt with planning and action execution",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string", 
+            "description": "User's request"
+          },
+          "model": {
+            "type": "string", 
+            "description": "Optional AI model override"
+          },
+          "include_examples": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to include examples in context"
+          }
+        },
+        "required": ["prompt"]
+      },
+      "output": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string"},
+              "content": {"type": "string"}
+            },
+            "required": ["type"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const": "action_output"},
+              "action": {"type": "object"},
+              "success": {"type": "boolean"},
+              "data": {"type": ["array", "object", "null"]},
+              "error": {"type": ["string", "null"]}
+            },
+            "required": ["type", "action", "success"],
+            "additionalProperties": false
+          }
+        ],
+        "discriminator": {"propertyName": "type"}
+      }
+    }
+  ],
+  "refractions": [
+    {
+      "name": "context.chat",
+      "target": "ai:context",
+      "frequency": "chat",
+      "transpose": {
+        "prompt": "prompt",
+        "model": "model?",
+        "include_examples": "include_examples?"
+      },
+      "reflection": {
+        "token": "token"
+      }
+    }
+  ]
+}

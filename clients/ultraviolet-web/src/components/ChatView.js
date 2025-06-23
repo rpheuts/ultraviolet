@@ -6,13 +6,17 @@ import {
   Card, 
   Chip,
   CircularProgress, 
+  Collapse,
   FormControl,
+  FormControlLabel,
   IconButton, 
   InputAdornment, 
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper, 
   Select,
+  Switch,
   TextField, 
   Tooltip,
   Typography 
@@ -23,11 +27,18 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import PsychologyIcon from '@mui/icons-material/Psychology';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import FileContextPanel from './FileContextPanel';
 import ChatService from '../services/ChatService';
+import AgentChatService from '../services/AgentChatService';
 
 /**
  * ChatView component for AI chat interface
@@ -41,19 +52,109 @@ function ChatView({ connectionManager }) {
   const [error, setError] = useState(null);
   const [contextFiles, setContextFiles] = useState([]);
   const [filesPanelOpen, setFilesPanelOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("us.anthropic.claude-sonnet-4-20250514-v1:0");
-  const [showReasoning, setShowReasoning] = useState(true);
+  const [selectedModelOption, setSelectedModelOption] = useState("bedrock-claude-4-sonnet");
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
+  const [agentProgress, setAgentProgress] = useState([]);
+  const [expandedActions, setExpandedActions] = useState({});
   const messagesEndRef = useRef(null);
   const chatServiceRef = useRef(null);
+  const agentServiceRef = useRef(null);
+
+  // Model options with backend routing
+  const MODEL_OPTIONS = [
+    // Bedrock Models
+    { 
+      id: 'bedrock-claude-4-sonnet', 
+      label: 'Bedrock - Claude Sonnet 4.0', 
+      backend: 'bedrock', 
+      model: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+      prism: 'core:bedrock'
+    },
+    { 
+      id: 'bedrock-claude-4-opus', 
+      label: 'Bedrock - Claude Opus 4.0', 
+      backend: 'bedrock', 
+      model: 'us.anthropic.claude-opus-4-20250514-v1:0',
+      prism: 'core:bedrock'
+    },
+    { 
+      id: 'bedrock-claude-3-7-sonnet', 
+      label: 'Bedrock - Claude Sonnet 3.7', 
+      backend: 'bedrock', 
+      model: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+      prism: 'core:bedrock'
+    },
+    { 
+      id: 'bedrock-claude-3-5-sonnet', 
+      label: 'Bedrock - Claude Sonnet 3.5', 
+      backend: 'bedrock', 
+      model: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+      prism: 'core:bedrock'
+    },
+    { 
+      id: 'bedrock-deepseek-r1', 
+      label: 'Bedrock - DeepSeek R1', 
+      backend: 'bedrock', 
+      model: 'us.deepseek.r1-v1:0',
+      prism: 'core:bedrock'
+    },
+    { 
+      id: 'bedrock-llama3', 
+      label: 'Bedrock - Llama 3', 
+      backend: 'bedrock', 
+      model: 'us.meta.llama3-1-405b-instruct-v1:0',
+      prism: 'core:bedrock'
+    },
+    { 
+      id: 'bedrock-nova', 
+      label: 'Bedrock - AWS Nova', 
+      backend: 'bedrock', 
+      model: 'us.amazon.nova-pro-v1:0',
+      prism: 'core:bedrock'
+    },
+    // AWS Q Models
+    { 
+      id: 'q-claude-4-sonnet', 
+      label: 'AWS Q - Claude Sonnet 4.0', 
+      backend: 'q', 
+      model: 'claude-4-sonnet',
+      prism: 'core:q'
+    },
+    { 
+      id: 'q-claude-3-7-sonnet', 
+      label: 'AWS Q - Claude Sonnet 3.7', 
+      backend: 'q', 
+      model: 'claude-3.7-sonnet',
+      prism: 'core:q'
+    },
+    { 
+      id: 'q-claude-3-5-sonnet', 
+      label: 'AWS Q - Claude Sonnet 3.5', 
+      backend: 'q', 
+      model: 'claude-3.5-sonnet',
+      prism: 'core:q'
+    }
+  ];
+
+  // Get current model option
+  const getCurrentModelOption = () => {
+    return MODEL_OPTIONS.find(option => option.id === selectedModelOption) || MODEL_OPTIONS[0];
+  };
   
-  // Initialize chat service
+  // Initialize chat services
   useEffect(() => {
     if (connectionManager) {
       chatServiceRef.current = new ChatService(connectionManager);
-      // Set default model to Claude 3.7
-      chatServiceRef.current.setModel(selectedModel);
+      agentServiceRef.current = new AgentChatService(connectionManager);
+      // Set default model based on current option
+      const currentOption = getCurrentModelOption();
+      chatServiceRef.current.setModel(currentOption.model);
+      chatServiceRef.current.setPrism(currentOption.prism);
+      agentServiceRef.current.setModel(currentOption.model);
+      agentServiceRef.current.setPrism(currentOption.prism);
     }
-  }, [connectionManager, selectedModel]);
+  }, [connectionManager, selectedModelOption]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -95,38 +196,82 @@ function ChatView({ connectionManager }) {
     setError(null);
     
     try {
-      // Add an empty assistant message that will be updated with tokens
-      const assistantMessageIndex = updatedMessages.length;
-      setMessages([...updatedMessages, { role: 'assistant', content: '' }]);
-      
-      // Process each token as it arrives
-      const onToken = (data) => {
-        if (data && data.token) {
-          setMessages(currentMessages => {
-            const newMessages = [...currentMessages];
-            // If this is the first token, stop the typing indicator
-            if (newMessages[assistantMessageIndex].content === '') {
-              setIsTyping(false);
+      if (agentMode) {
+        // Agent mode: handle structured events from agent prism
+        setAgentProgress([]);
+        
+        const onEvent = (eventData) => {
+          const processedEvent = agentServiceRef.current.processEvent(eventData);
+          if (processedEvent) {
+            switch (processedEvent.display) {
+              case 'message':
+                setMessages(currentMessages => [
+                  ...currentMessages,
+                  { role: 'assistant', content: processedEvent.content, type: 'ai_response' }
+                ]);
+                setIsTyping(false);
+                break;
+              case 'reasoning':
+                setMessages(currentMessages => {
+                  const newMessages = [...currentMessages];
+                  const lastMessage = newMessages[newMessages.length - 1];
+                  if (lastMessage && lastMessage.role === 'assistant') {
+                    lastMessage.reasoning = processedEvent.content;
+                  }
+                  return newMessages;
+                });
+                break;
+              case 'progress':
+                setAgentProgress(current => [...current, processedEvent.content]);
+                break;
+              case 'action_result':
+                setMessages(currentMessages => [
+                  ...currentMessages,
+                  { 
+                    role: 'system', 
+                    content: processedEvent, 
+                    type: 'action_result'
+                  }
+                ]);
+                break;
+              case 'completion':
+                setIsTyping(false);
+                setAgentProgress([]); // Clear progress indicators
+                break;
             }
-            // Append the token to the current assistant message
-            newMessages[assistantMessageIndex] = {
-              ...newMessages[assistantMessageIndex],
-              content: newMessages[assistantMessageIndex].content + data.token
-            };
-            return newMessages;
-          });
-        }
-      };
+          }
+        };
+        
+        await agentServiceRef.current.sendMessage(userMessage, contextFiles, onEvent);
+      } else {
+        // Direct AI mode: handle token streaming from bedrock
+        const assistantMessageIndex = updatedMessages.length;
+        setMessages([...updatedMessages, { role: 'assistant', content: '' }]);
+        
+        const onToken = (data) => {
+          if (data && data.token) {
+            setMessages(currentMessages => {
+              const newMessages = [...currentMessages];
+              if (newMessages[assistantMessageIndex].content === '') {
+                setIsTyping(false);
+              }
+              newMessages[assistantMessageIndex] = {
+                ...newMessages[assistantMessageIndex],
+                content: newMessages[assistantMessageIndex].content + data.token
+              };
+              return newMessages;
+            });
+          }
+        };
+        
+        await chatServiceRef.current.sendMessage(
+          updatedMessages,
+          userMessage,
+          contextFiles,
+          onToken
+        );
+      }
       
-      // Send the message and get streaming response
-      await chatServiceRef.current.sendMessage(
-        updatedMessages,
-        userMessage,
-        contextFiles,
-        onToken
-      );
-      
-      // Ensure typing indicator is off when complete
       setIsTyping(false);
     } catch (err) {
       setError(`Error: ${err.message}`);
@@ -138,6 +283,15 @@ function ChatView({ connectionManager }) {
   const handleClearConversation = () => {
     setMessages([]);
     setError(null);
+    setExpandedActions({}); // Clear expanded actions state
+  };
+
+  // Toggle action expansion
+  const toggleActionExpanded = (index) => {
+    setExpandedActions(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
   };
   
   // Code block component with copy button
@@ -284,6 +438,115 @@ function ChatView({ connectionManager }) {
     return [{ content, isReasoning: false }];
   };
   
+  // Render action result card for agent mode
+  const renderActionResult = (actionEvent, index) => {
+    const { action, success, data, error } = actionEvent.content;
+    const expanded = expandedActions[index] || false;
+    
+    return (
+      <Box key={index} sx={{ mb: 2, display: 'flex', justifyContent: 'flex-start' }}>
+        <Card 
+          elevation={2}
+          sx={{ 
+            maxWidth: '80%',
+            border: success ? '1px solid #4caf50' : '1px solid #f44336',
+            borderRadius: 2
+          }}
+        >
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              {success ? (
+                <CheckCircleIcon sx={{ color: 'success.main', mr: 1 }} />
+              ) : (
+                <ErrorIcon sx={{ color: 'error.main', mr: 1 }} />
+              )}
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', flex: 1 }}>
+                {action.prism} · {action.frequency}
+              </Typography>
+              
+              {/* Toggle button for data/error visibility */}
+              {((success && data) || (!success && error)) && (
+                <IconButton
+                  size="small"
+                  onClick={() => toggleActionExpanded(index)}
+                  sx={{ ml: 1 }}
+                >
+                  {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              )}
+            </Box>
+            
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {action.description}
+            </Typography>
+            
+            {/* Show summary when collapsed */}
+            {!expanded && success && data && (
+              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                Result available - click to expand
+              </Typography>
+            )}
+            
+            {!expanded && !success && error && (
+              <Typography variant="caption" color="error.main" sx={{ fontStyle: 'italic' }}>
+                Error details available - click to expand
+              </Typography>
+            )}
+            
+            {/* Collapsible result data */}
+            <Collapse in={expanded}>
+              {success && data && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Result:
+                  </Typography>
+                  <Paper 
+                    sx={{ 
+                      p: 1, 
+                      mt: 0.5, 
+                      bgcolor: 'rgba(76, 175, 80, 0.05)',
+                      border: '1px solid rgba(76, 175, 80, 0.2)',
+                      maxHeight: '300px',
+                      overflowY: 'auto'
+                    }}
+                  >
+                    <Typography variant="body2" component="pre" sx={{ 
+                      whiteSpace: 'pre-wrap',
+                      fontSize: '0.8rem',
+                      fontFamily: 'monospace'
+                    }}>
+                      {JSON.stringify(data, null, 2)}
+                    </Typography>
+                  </Paper>
+                </Box>
+              )}
+              
+              {!success && error && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption" color="error.main">
+                    Error:
+                  </Typography>
+                  <Paper 
+                    sx={{ 
+                      p: 1, 
+                      mt: 0.5,
+                      bgcolor: 'rgba(244, 67, 54, 0.05)',
+                      border: '1px solid rgba(244, 67, 54, 0.2)'
+                    }}
+                  >
+                    <Typography variant="body2" color="error.main">
+                      {error}
+                    </Typography>
+                  </Paper>
+                </Box>
+              )}
+            </Collapse>
+          </Box>
+        </Card>
+      </Box>
+    );
+  };
+
   // Render a message bubble
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
@@ -317,6 +580,9 @@ function ChatView({ connectionManager }) {
           </Paper>
         </Box>
       );
+    } else if (message.role === 'system' && message.type === 'action_result') {
+      // Render action result cards for agent mode
+      return renderActionResult(message, index);
     } else {
       // Process assistant messages to handle reasoning sections
       const processedContent = processMessageContent(message.content);
@@ -336,12 +602,22 @@ function ChatView({ connectionManager }) {
               p: 2,
               maxWidth: '80%',
               borderRadius: 2,
-              bgcolor: 'background.paper',
+              bgcolor: message.type === 'ai_response' && agentMode ? 'rgba(25, 118, 210, 0.05)' : 'background.paper',
               color: 'text.primary',
               borderTopRightRadius: 2,
-              borderTopLeftRadius: 0
+              borderTopLeftRadius: 0,
+              borderLeft: message.type === 'ai_response' && agentMode ? '4px solid #1976d2' : 'none'
             }}
           >
+            {message.type === 'ai_response' && agentMode && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <SmartToyIcon fontSize="small" sx={{ color: 'primary.main', mr: 1 }} />
+                <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                  AI AGENT
+                </Typography>
+              </Box>
+            )}
+            
             {processedContent.map((part, partIndex) => (
               (showReasoning || !part.isReasoning) && (
                 <Box 
@@ -393,6 +669,41 @@ function ChatView({ connectionManager }) {
                 </Box>
               )
             ))}
+            
+            {/* Show agent reasoning if available */}
+            {message.reasoning && showReasoning && (
+              <Box sx={{
+                bgcolor: 'rgba(144, 202, 249, 0.1)',
+                borderLeft: '4px solid',
+                borderColor: 'info.main',
+                pl: 1.5,
+                py: 1,
+                my: 1,
+                borderRadius: '0 4px 4px 0',
+                position: 'relative'
+              }}>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    position: 'absolute',
+                    top: -10,
+                    left: 8,
+                    bgcolor: 'info.main',
+                    color: 'info.contrastText',
+                    px: 1,
+                    py: 0.25,
+                    borderRadius: '4px 4px 0 0',
+                    fontSize: '0.7rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  REASONING
+                </Typography>
+                <ReactMarkdown components={MarkdownComponents}>
+                  {message.reasoning}
+                </ReactMarkdown>
+              </Box>
+            )}
           </Paper>
         </Box>
       );
@@ -414,25 +725,44 @@ function ChatView({ connectionManager }) {
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="h6">AI Chat</Typography>
-          <FormControl variant="outlined" size="small" sx={{ minWidth: 150 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={agentMode}
+                onChange={(e) => setAgentMode(e.target.checked)}
+                color="primary"
+              />
+            }
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <SmartToyIcon fontSize="small" />
+                <Typography variant="body2">Agent Mode</Typography>
+              </Box>
+            }
+          />
+          <FormControl variant="outlined" size="small" sx={{ minWidth: 200 }}>
             <InputLabel>Model</InputLabel>
             <Select
-              value={selectedModel}
+              value={selectedModelOption}
               onChange={(e) => {
-                setSelectedModel(e.target.value);
-                if (chatServiceRef.current) {
-                  chatServiceRef.current.setModel(e.target.value);
+                setSelectedModelOption(e.target.value);
+                const selectedOption = MODEL_OPTIONS.find(option => option.id === e.target.value);
+                if (selectedOption && chatServiceRef.current) {
+                  chatServiceRef.current.setModel(selectedOption.model);
+                  chatServiceRef.current.setPrism(selectedOption.prism);
+                }
+                if (selectedOption && agentServiceRef.current) {
+                  agentServiceRef.current.setModel(selectedOption.model);
+                  agentServiceRef.current.setPrism(selectedOption.prism);
                 }
               }}
               label="Model"
             >
-              <MenuItem value="us.anthropic.claude-sonnet-4-20250514-v1:0">Claude Sonnet 4.0</MenuItem>
-              <MenuItem value="us.anthropic.claude-opus-4-20250514-v1:0">Claude Opus 4.0</MenuItem>
-              <MenuItem value="us.anthropic.claude-3-7-sonnet-20250219-v1:0">Claude Sonnet 3.7</MenuItem>
-              <MenuItem value="us.anthropic.claude-3-5-sonnet-20241022-v2:0">Claude Sonnet 3.5</MenuItem>
-              <MenuItem value="us.deepseek.r1-v1:0">DeepSeek R1</MenuItem>
-              <MenuItem value="us.meta.llama3-1-405b-instruct-v1:0">Llama 3</MenuItem>
-              <MenuItem value="us.amazon.nova-pro-v1:0">AWS Nova</MenuItem>
+              {MODEL_OPTIONS.map((option) => (
+                <MenuItem key={option.id} value={option.id}>
+                  {option.label}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Box>
@@ -524,8 +854,36 @@ function ChatView({ connectionManager }) {
           >
             <CircularProgress size={16} sx={{ mr: 1 }} />
             <Typography variant="body2" color="text.secondary">
-              AI is typing...
+              {agentMode ? "AI Agent is working..." : "AI is typing..."}
             </Typography>
+          </Box>
+        )}
+        
+        {/* Agent progress indicators */}
+        {agentMode && agentProgress.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            {agentProgress.map((progress, index) => (
+              <Box key={index} sx={{ mb: 1, ml: 2 }}>
+                <Card elevation={1} sx={{ p: 1.5, bgcolor: 'rgba(25, 118, 210, 0.05)' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <PlayArrowIcon fontSize="small" sx={{ color: 'primary.main', mr: 1 }} />
+                    <Typography variant="body2" color="primary.main">
+                      {progress}
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    sx={{ 
+                      mt: 1, 
+                      height: 2,
+                      bgcolor: 'rgba(25, 118, 210, 0.1)',
+                      '& .MuiLinearProgress-bar': {
+                        bgcolor: 'primary.main'
+                      }
+                    }} 
+                  />
+                </Card>
+              </Box>
+            ))}
           </Box>
         )}
         
