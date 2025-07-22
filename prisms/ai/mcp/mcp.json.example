@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "amazon-internal-mcp-server": {
+      "command": "amzn-mcp",
+      "args": [],
+      "disabled": false,
+      "env": {},
+      "autoApprove": []
+    },
+    "local-filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "disabled": false,
+      "env": {},
+      "autoApprove": []
+    }
+  }
+}

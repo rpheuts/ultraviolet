@@ -77,9 +77,10 @@ class ChatService {
    * @param {string} userMessage - New user message
    * @param {Array} contextFiles - Array of file objects with name and content
    * @param {function} onToken - Callback for each token as it arrives
+   * @param {function} onUsage - Optional callback for token usage information
    * @returns {Promise} Resolves with complete response when finished
    */
-  sendMessage(conversationHistory, userMessage, contextFiles, onToken) {
+  sendMessage(conversationHistory, userMessage, contextFiles, onToken, onUsage) {
     // Create a new conversation history with the user message
     const messages = [
       ...conversationHistory,
@@ -105,7 +106,17 @@ class ChatService {
       this.prismId,
       'invoke_stream',
       input,
-      onToken
+      (data) => {
+        // Handle token data
+        if (data && data.token !== undefined) {
+          onToken(data);
+        }
+        
+        // Handle usage data
+        if (data && data.usage && onUsage) {
+          onUsage(data.usage);
+        }
+      }
     );
   }
 }

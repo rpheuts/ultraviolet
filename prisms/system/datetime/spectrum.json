@@ -1,0 +1,46 @@
+{
+  "name": "datetime",
+  "namespace": "system",
+  "version": "0.1.0",
+  "description": "DateTime prism for getting current date and time information",
+  "wavelengths": [
+    {
+      "frequency": "now",
+      "description": "Get current date and time in multiple formats",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "ISO 8601 timestamp with milliseconds"
+          },
+          "unix_timestamp": {
+            "type": "integer",
+            "description": "Unix timestamp in seconds"
+          },
+          "unix_timestamp_ms": {
+            "type": "integer",
+            "description": "Unix timestamp in milliseconds"
+          },
+          "date": {
+            "type": "string",
+            "description": "Date in YYYY-MM-DD format"
+          },
+          "time": {
+            "type": "string",
+            "description": "Time in HH:MM:SS format"
+          },
+          "datetime": {
+            "type": "string",
+            "description": "Human readable date and time"
+          }
+        }
+      }
+    }
+  ]
+}

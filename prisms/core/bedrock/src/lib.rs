@@ -10,6 +10,7 @@ use aws_sdk_bedrockruntime::types::{ContentBlock, ConversationRole, ConverseStre
 use serde_json::{json, Value};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
+use claude_tokenizer::count_tokens;
 
 use spectrum::{DEFAULT_MODEL, DEFAULT_REGION, InvokeRequest};
 use uv_core::{
@@ -197,13 +198,23 @@ impl BedrockPrism {
         // Get the model ID (or use default)
         let model = request.model.unwrap_or_else(|| DEFAULT_MODEL.to_string());
 
+        // Calculate prompt tokens before API call
+        let prompt_tokens = count_tokens(&request.prompt)
+            .map_err(|e| UVError::ExecutionError(format!("Failed to calculate prompt tokens: {}", e)))?;
+
         // Invoke the model using the tokio runtime
         let response = self.runtime.block_on(async {
             self.invoke_model(&model, &request.prompt, request.max_tokens).await
         })?;
 
-        // Emit the response
-        link.emit_photon(id, json!({ "response": response }))?;
+        // Emit the response with prompt token count
+        link.emit_photon(id, json!({ 
+            "response": response,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "source": "calculated"
+            }
+        }))?;
 
         // Signal successful completion
         link.emit_trap(id, None)?;
@@ -219,6 +230,19 @@ impl BedrockPrism {
 
         // Get the model ID (or use default)
         let model = request.model.unwrap_or_else(|| DEFAULT_MODEL.to_string());
+
+        // Calculate prompt tokens before API call
+        let prompt_tokens = count_tokens(&request.prompt)
+            .map_err(|e| UVError::ExecutionError(format!("Failed to calculate prompt tokens: {}", e)))?;
+
+        // Send final token with usage information
+        link.emit_photon(id, json!({
+            "token": "",
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "source": "calculated"
+            }
+        }))?;
 
         // Invoke the model with streaming using the tokio runtime
         self.runtime.block_on(async {

@@ -10,6 +10,9 @@ pub struct ExecuteRequest {
     /// Whether to include usage examples in context
     #[serde(default = "default_include_examples")]
     pub include_examples: bool,
+    /// Preferred AI backend ("bedrock" or "q")
+    #[serde(default = "default_backend")]
+    pub backend: String,
 }
 
 /// Agent plan returned from context prism
@@ -130,4 +133,9 @@ impl ConversationContext {
 /// Default include_examples value: true
 fn default_include_examples() -> bool {
     true
+}
+
+/// Default backend value: "bedrock"
+fn default_backend() -> String {
+    "bedrock".to_string()
 }

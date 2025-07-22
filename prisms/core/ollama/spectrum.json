@@ -1,0 +1,49 @@
+{
+  "name": "ollama",
+  "namespace": "core",
+  "version": "0.1.0",
+  "description": "Ollama local AI model integration",
+  "wavelengths": [
+    {
+      "frequency": "invoke",
+      "description": "Invoke an AI model",
+      "input": {
+        "type": "object",
+        "properties": {
+          "model": {"type": "string", "description": "Model ID (optional)"},
+          "prompt": {"type": "string", "description": "Input prompt"},
+          "max_tokens": {"type": "integer", "default": 4096}
+        },
+        "required": ["prompt"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "response": {"type": "string"},
+          "prompt_tokens": {"type": "integer"}
+        }
+      }
+    },
+    {
+      "frequency": "invoke_stream",
+      "description": "Invoke with streaming response",
+      "input": {
+        "type": "object",
+        "properties": {
+          "model": {"type": "string", "description": "Model ID (optional)"},
+          "prompt": {"type": "string", "description": "Input prompt"},
+          "max_tokens": {"type": "integer", "default": 4096}
+        },
+        "required": ["prompt"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "token": {"type": "string", "description": "Single output token from model"},
+          "prompt_tokens": {"type": "integer"}
+        },
+        "x-uv-stream": "token"
+      }
+    }
+  ]
+}

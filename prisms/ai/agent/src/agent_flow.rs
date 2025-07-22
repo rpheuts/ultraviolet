@@ -28,8 +28,17 @@ impl AgentFlow {
             // Build contextual request for this iteration
             let contextual_request = self.build_contextual_request(&request, &context);
             
-            // 1. Get plan from context prism
-            let plan = self.context_collector.collect_and_parse(contextual_request).await?;
+            // 1. Get plan from context prism with usage forwarding
+            let response = match self.context_collector.stream_with_usage_forwarding(contextual_request, id, link).await {
+                Ok(response) => response,
+                Err(e) => {
+                    // If we get an error from the underlying prism (like Q CLI), propagate it directly
+                    // instead of trying to parse it as JSON
+                    return Err(e);
+                }
+            };
+            
+            let plan = self.context_collector.parse_agent_plan(&response)?;
 
             // 2. Stream the response and reasoning
             self.stream_plan_response(&plan, id, link).await?;
@@ -111,6 +120,7 @@ impl AgentFlow {
                 prompt: contextual_prompt,
                 model: original_request.model.clone(),
                 include_examples: original_request.include_examples,
+                backend: original_request.backend.clone(),
             }
         }
     }

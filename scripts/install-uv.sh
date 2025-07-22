@@ -111,6 +111,11 @@ main() {
             install_prism "$prism_dir" "$install_dir" "$namespace" "$name"
         done
     done
+
+    # Install knowledge
+    mkdir -p "$install_dir/knowledge"
+    cp "ai/knowledge"/* "$install_dir/knowledge" || \
+        error "Failed to install knowledge"
     
     log "Installation complete!"
 }

@@ -1,0 +1,36 @@
+{
+  "name": "timer",
+  "namespace": "system",
+  "version": "0.1.0",
+  "description": "Timer prism for delays and scheduling in workflows",
+  "wavelengths": [
+    {
+      "frequency": "wait",
+      "description": "Wait for a specified duration before completing",
+      "input": {
+        "type": "object",
+        "properties": {
+          "duration_ms": {
+            "type": "integer",
+            "description": "Duration to wait in milliseconds",
+            "minimum": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "Optional message to emit while waiting"
+          }
+        },
+        "required": ["duration_ms"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Optional status message"
+          }
+        }
+      }
+    }
+  ]
+}

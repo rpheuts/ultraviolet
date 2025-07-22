@@ -18,6 +18,10 @@
             "type": "string", 
             "description": "Optional AI model override"
           },
+          "backend": {
+            "type": "string", 
+            "description": "Optional AI backend override (q or bedrock)"
+          },
           "include_examples": {
             "type": "boolean",
             "default": true,
@@ -66,8 +70,46 @@
       }
     },
     {
+      "name": "knowledge.search",
+      "target": "ai:knowledge", 
+      "frequency": "search",
+      "transpose": {
+        "category": "category",
+        "query": "query"
+      },
+      "reflection": {
+        "content": "content"
+      }
+    },
+    {
       "name": "bedrock.invoke_stream",
       "target": "core:bedrock",
+      "frequency": "invoke_stream",
+      "transpose": {
+        "model": "model?",
+        "prompt": "prompt",
+        "max_tokens": "max_tokens?"
+      },
+      "reflection": {
+        "token": "token"
+      }
+    },
+    {
+      "name": "q.invoke_stream",
+      "target": "core:q",
+      "frequency": "invoke_stream",
+      "transpose": {
+        "model": "model?",
+        "prompt": "prompt",
+        "max_tokens": "max_tokens?"
+      },
+      "reflection": {
+        "token": "token"
+      }
+    },
+    {
+      "name": "ollama.invoke_stream",
+      "target": "core:ollama",
       "frequency": "invoke_stream",
       "transpose": {
         "model": "model?",

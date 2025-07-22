@@ -6,10 +6,11 @@
 pub mod spectrum;
 
 use serde_json::{json, Value};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
+use regex::Regex;
 
 use spectrum::{DEFAULT_MODEL, InvokeRequest};
 use uv_core::{
@@ -46,6 +47,16 @@ impl QPrism {
     ) -> Result<String> {
         let model_str = model.to_string();
         let prompt_str = prompt.to_string();
+
+        // Static ANSI and control character cleaning function
+        let clean_chunk = |chunk: &str| -> String {
+            let ansi_regex = Regex::new(r"\x1b\[[0-9;]*[mK]").unwrap();
+            let ansi_cleaned = ansi_regex.replace_all(chunk, "");
+            // Remove all control characters (0x00-0x1F) except newlines and tabs
+            ansi_cleaned.chars()
+                .filter(|&c| c >= ' ' || c == '\n' || c == '\t')
+                .collect()
+        };
         
         // Execute Q CLI command with stdin piping
         let output = tokio::task::spawn_blocking(move || {
@@ -91,12 +102,14 @@ impl QPrism {
             )));
         }
 
-        // Convert output to string
-        let response = String::from_utf8_lossy(&output.stdout).to_string();
-        Ok(response)
+        // Convert output to string and clean it
+        let raw_response = String::from_utf8_lossy(&output.stdout).to_string();
+        let clean_response = clean_chunk(&raw_response);
+        
+        Ok(clean_response)
     }
 
-    /// Invoke Q CLI with streaming response using stdin
+    /// Invoke Q CLI with real streaming response
     async fn invoke_q_cli_stream(
         &self,
         model: &str,
@@ -105,11 +118,31 @@ impl QPrism {
         id: Uuid,
         link: &UVLink,
     ) -> Result<()> {
+        use std::io::{BufReader};
+        use std::process::Stdio;
+        
         let model_str = model.to_string();
         let prompt_str = prompt.to_string();
+        let link_clone = link.clone();
         
-        // Execute Q CLI command with stdin piping
-        let output = tokio::task::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
+            // Static ANSI and control character cleaning function
+            let clean_chunk = |chunk: &str| -> String {
+                let ansi_regex = Regex::new(r"\x1b\[[0-9;]*[mK]").unwrap();
+                let ansi_cleaned = ansi_regex.replace_all(chunk, "");
+                // Remove all control characters (0x00-0x1F) except newlines and tabs
+                let control_cleaned: String = ansi_cleaned.chars()
+                    .filter(|&c| c >= ' ' || c == '\n' || c == '\t' || c == '\r')
+                    .collect();
+                let mut cleaned = control_cleaned.replace("\r\n", "\n").replace("\r", "\n").replace("•", "\n •");
+
+                if cleaned.starts_with(">") {
+                    cleaned = cleaned.replacen(">", "", 1);
+                }
+
+                return cleaned;
+            };
+            
             let mut cmd = Command::new("q");
             cmd.args(&["chat", "--no-interactive"]);
             
@@ -133,45 +166,94 @@ impl QPrism {
                     .map_err(|e| UVError::ExecutionError(format!("Failed to write to Q CLI stdin: {}", e)))?;
                 stdin.flush()
                     .map_err(|e| UVError::ExecutionError(format!("Failed to flush Q CLI stdin: {}", e)))?;
-                // Close stdin to signal EOF
                 drop(stdin);
             }
             
-            // Wait for output
-            child.wait_with_output()
-                .map_err(|e| UVError::ExecutionError(format!("Failed to read Q CLI output: {}", e)))
+            // Stream stdout in real-time while also capturing stderr
+            let mut stderr_buffer = Vec::new();
+            let mut tokens_sent = false;
+            
+            if let Some(stdout) = child.stdout.take() {
+                if let Some(mut stderr) = child.stderr.take() {
+                    // Read stderr in background to prevent blocking
+                    let stderr_handle = std::thread::spawn(move || {
+                        let mut buffer = Vec::new();
+                        stderr.read_to_end(&mut buffer).unwrap_or(0);
+                        buffer
+                    });
+                    
+                    // Stream stdout
+                    let reader = BufReader::new(stdout);
+                    let mut buffer = [0; 256]; // Small buffer for streaming
+                    let mut stdout_reader = reader.into_inner();
+                    
+                    loop {
+                        match stdout_reader.read(&mut buffer) {
+                            Ok(0) => break, // EOF
+                            Ok(n) => {
+                                let chunk = String::from_utf8_lossy(&buffer[..n]);
+                                let cleaned_chunk = clean_chunk(&chunk);
+                                
+                                if !cleaned_chunk.is_empty() {
+                                    link_clone.emit_photon(id, json!({"token": cleaned_chunk}))
+                                        .map_err(|e| UVError::ExecutionError(format!("Failed to emit photon: {}", e)))?;
+                                    tokens_sent = true; // Track that we sent at least one token
+                                }
+                            }
+                            Err(e) => {
+                                return Err(UVError::ExecutionError(format!("Failed to read stdout: {}", e)));
+                            }
+                        }
+                    }
+                    
+                    // Get stderr content
+                    stderr_buffer = stderr_handle.join().unwrap_or_default();
+                }
+            }
+            
+            // Wait for process to complete
+            let status = child.wait()
+                .map_err(|e| UVError::ExecutionError(format!("Failed to wait for Q CLI: {}", e)))?;
+            
+            // Smart error detection: if no tokens were sent, check stderr for error messages
+            if !tokens_sent && !stderr_buffer.is_empty() {
+                let stderr = String::from_utf8_lossy(&stderr_buffer);
+                
+                // Filter out normal Q CLI chatter and extract actual error messages
+                let error_lines: Vec<&str> = stderr
+                    .lines()
+                    .filter(|line| {
+                        let line = line.trim();
+                        // Skip normal Q CLI status messages
+                        !line.is_empty()
+                    })
+                    .collect();
+                
+                if !error_lines.is_empty() {
+                    let error_msg = format!("Q CLI Error: {}", error_lines.join(" "));
+                    link_clone.emit_trap(id, Some(UVError::ExecutionError(error_msg)))?;
+                    return Ok(());
+                }
+            }
+            
+            // Also check traditional exit status (in case Q CLI fixes their behavior)
+            if !status.success() {
+                let stderr = String::from_utf8_lossy(&stderr_buffer);
+                let error_msg = if stderr.trim().is_empty() {
+                    "Q CLI command failed".to_string()
+                } else {
+                    format!("Q CLI Error: {}", stderr.trim())
+                };
+                link_clone.emit_trap(id, Some(UVError::ExecutionError(error_msg)))?;
+                return Ok(());
+            }
+
+            link_clone.emit_trap(id, None)?;
+            
+            Ok(())
         }).await
-        .map_err(|e| UVError::ExecutionError(format!("Failed to spawn Q CLI task: {}", e)))??;
+        .map_err(|e| UVError::ExecutionError(format!("Failed to spawn streaming task: {}", e)))??;
 
-        // Check if the command was successful
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(UVError::ExecutionError(format!(
-                "Q CLI command failed: {} (Make sure 'q' CLI tool is installed and available in PATH)",
-                stderr
-            )));
-        }
-
-        // Convert output to string and simulate streaming by emitting word by word
-        let response = String::from_utf8_lossy(&output.stdout);
-        
-        // Split response into words and emit as tokens to simulate streaming
-        let words: Vec<&str> = response.split_whitespace().collect();
-        for (i, word) in words.iter().enumerate() {
-            let token = if i == 0 { 
-                word.to_string() 
-            } else { 
-                format!(" {}", word)
-            };
-            
-            link.emit_photon(id, json!({"token": token}))?;
-            
-            // Add small delay to simulate streaming (optional)
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
-
-        // Signal completion
-        link.emit_trap(id, None)?;
         Ok(())
     }
 

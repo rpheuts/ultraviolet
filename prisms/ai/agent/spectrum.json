@@ -18,6 +18,10 @@
             "type": "string", 
             "description": "Optional AI model override"
           },
+          "backend": {
+            "type": "string", 
+            "description": "Default AI backend to use (q or bedrock)"
+          },
           "include_examples": {
             "type": "boolean",
             "default": true,
@@ -62,6 +66,7 @@
       "transpose": {
         "prompt": "prompt",
         "model": "model?",
+        "backend": "backend?",
         "include_examples": "include_examples?"
       },
       "reflection": {

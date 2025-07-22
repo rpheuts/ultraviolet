@@ -1,0 +1,133 @@
+{
+  "name": "knowledge",
+  "namespace": "ai",
+  "version": "0.1.0",
+  "description": "AI knowledge base for storing and retrieving learnings",
+  "wavelengths": [
+    {
+      "frequency": "store",
+      "description": "Store new knowledge or learning",
+      "input": {
+        "type": "object",
+        "properties": {
+          "content": {"type": "string", "description": "Knowledge content"},
+          "title": {"type": "string", "description": "Optional title"},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"},
+          "category": {"type": "string", "description": "Optional category"}
+        },
+        "required": ["content"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "stored_at": {"type": "string"}
+        }
+      }
+    },
+    {
+      "frequency": "search",
+      "description": "Search existing knowledge",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "Search terms"},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"},
+          "category": {"type": "string", "description": "Filter by category"},
+          "limit": {"type": "integer", "default": 10, "description": "Max results"}
+        },
+        "required": ["query"]
+      },
+      "output": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "title": {"type": ["string", "null"]},
+            "content": {"type": ["string", "null"]},
+            "tags": {"type": ["array", "null"], "items": {"type": "string"}},
+            "category": {"type": ["string", "null"]},
+            "relevance_score": {"type": ["number", "null"]}
+          },
+          "required": ["id"]
+        }
+      }
+    },
+    {
+      "frequency": "retrieve",
+      "description": "Get specific knowledge by ID",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "description": "Knowledge ID"}
+        },
+        "required": ["id"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "title": {"type": "string"},
+          "content": {"type": "string"},
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "category": {"type": "string"},
+          "created_at": {"type": "string"},
+          "updated_at": {"type": "string"}
+        }
+      }
+    },
+    {
+      "frequency": "update",
+      "description": "Update existing knowledge",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "description": "Knowledge ID"},
+          "content": {"type": "string", "description": "Updated content"},
+          "title": {"type": "string", "description": "Updated title"},
+          "tags": {"type": "array", "items": {"type": "string"}, "description": "Updated tags"},
+          "category": {"type": "string", "description": "Updated category"}
+        },
+        "required": ["id"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "updated_at": {"type": "string"}
+        }
+      }
+    },
+    {
+      "frequency": "list_categories",
+      "description": "Get available categories",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "categories": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    {
+      "frequency": "list_tags",
+      "description": "Get available tags",
+      "input": {
+        "type": "object",
+        "properties": {
+          "prefix": {"type": "string", "description": "Optional prefix filter"}
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "tags": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  ]
+}

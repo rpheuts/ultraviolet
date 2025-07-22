@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Badge,
   Box, 
-  Button, 
+  Button,
   Card, 
   Chip,
   CircularProgress, 
@@ -33,12 +33,16 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import HistoryIcon from '@mui/icons-material/History';
+import CompressIcon from '@mui/icons-material/Compress';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import FileContextPanel from './FileContextPanel';
+import ConversationHistory from './ConversationHistory';
 import ChatService from '../services/ChatService';
 import AgentChatService from '../services/AgentChatService';
+import ConversationStorage from '../services/ConversationStorage';
 
 /**
  * ChatView component for AI chat interface
@@ -50,16 +54,23 @@ function ChatView({ connectionManager }) {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState(null);
+  const [lastFailedPrompt, setLastFailedPrompt] = useState(null);
+  const [lastFailedContextFiles, setLastFailedContextFiles] = useState([]);
   const [contextFiles, setContextFiles] = useState([]);
   const [filesPanelOpen, setFilesPanelOpen] = useState(false);
-  const [selectedModelOption, setSelectedModelOption] = useState("bedrock-claude-4-sonnet");
+  const [selectedModelOption, setSelectedModelOption] = useState("q-claude-4-sonnet");
   const [showReasoning, setShowReasoning] = useState(false);
-  const [agentMode, setAgentMode] = useState(false);
+  const [agentMode, setAgentMode] = useState(true);
   const [agentProgress, setAgentProgress] = useState([]);
   const [expandedActions, setExpandedActions] = useState({});
+  const [currentSession, setCurrentSession] = useState(null);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [tokenUsage, setTokenUsage] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const messagesEndRef = useRef(null);
   const chatServiceRef = useRef(null);
   const agentServiceRef = useRef(null);
+  const conversationStorageRef = useRef(null);
 
   // Model options with backend routing
   const MODEL_OPTIONS = [
@@ -69,49 +80,56 @@ function ChatView({ connectionManager }) {
       label: 'Bedrock - Claude Sonnet 4.0', 
       backend: 'bedrock', 
       model: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
-      prism: 'core:bedrock'
+      prism: 'core:bedrock',
+      contextLimit: 200000
     },
     { 
       id: 'bedrock-claude-4-opus', 
       label: 'Bedrock - Claude Opus 4.0', 
       backend: 'bedrock', 
       model: 'us.anthropic.claude-opus-4-20250514-v1:0',
-      prism: 'core:bedrock'
+      prism: 'core:bedrock',
+      contextLimit: 200000
     },
     { 
       id: 'bedrock-claude-3-7-sonnet', 
       label: 'Bedrock - Claude Sonnet 3.7', 
       backend: 'bedrock', 
       model: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
-      prism: 'core:bedrock'
+      prism: 'core:bedrock',
+      contextLimit: 200000
     },
     { 
       id: 'bedrock-claude-3-5-sonnet', 
       label: 'Bedrock - Claude Sonnet 3.5', 
       backend: 'bedrock', 
       model: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
-      prism: 'core:bedrock'
+      prism: 'core:bedrock',
+      contextLimit: 200000
     },
     { 
       id: 'bedrock-deepseek-r1', 
       label: 'Bedrock - DeepSeek R1', 
       backend: 'bedrock', 
       model: 'us.deepseek.r1-v1:0',
-      prism: 'core:bedrock'
+      prism: 'core:bedrock',
+      contextLimit: 200000
     },
     { 
       id: 'bedrock-llama3', 
       label: 'Bedrock - Llama 3', 
       backend: 'bedrock', 
       model: 'us.meta.llama3-1-405b-instruct-v1:0',
-      prism: 'core:bedrock'
+      prism: 'core:bedrock',
+      contextLimit: 200000
     },
     { 
       id: 'bedrock-nova', 
       label: 'Bedrock - AWS Nova', 
       backend: 'bedrock', 
       model: 'us.amazon.nova-pro-v1:0',
-      prism: 'core:bedrock'
+      prism: 'core:bedrock',
+      contextLimit: 200000
     },
     // AWS Q Models
     { 
@@ -119,21 +137,24 @@ function ChatView({ connectionManager }) {
       label: 'AWS Q - Claude Sonnet 4.0', 
       backend: 'q', 
       model: 'claude-4-sonnet',
-      prism: 'core:q'
-    },
-    { 
-      id: 'q-claude-3-7-sonnet', 
-      label: 'AWS Q - Claude Sonnet 3.7', 
-      backend: 'q', 
-      model: 'claude-3.7-sonnet',
-      prism: 'core:q'
+      prism: 'core:q',
+      contextLimit: 200000
     },
     { 
       id: 'q-claude-3-5-sonnet', 
       label: 'AWS Q - Claude Sonnet 3.5', 
       backend: 'q', 
       model: 'claude-3.5-sonnet',
-      prism: 'core:q'
+      prism: 'core:q',
+      contextLimit: 200000
+    },
+    { 
+      id: 'ollama-gemma3-12b', 
+      label: 'Ollama - Gemma 3 (12b)', 
+      backend: 'ollama', 
+      model: 'gemma3:12b',
+      prism: 'core:ollama',
+      contextLimit: 200000
     }
   ];
 
@@ -142,8 +163,14 @@ function ChatView({ connectionManager }) {
     return MODEL_OPTIONS.find(option => option.id === selectedModelOption) || MODEL_OPTIONS[0];
   };
   
-  // Initialize chat services
+  // Initialize conversation storage and chat services
   useEffect(() => {
+    // Initialize conversation storage
+    conversationStorageRef.current = new ConversationStorage();
+    
+    // Create or load session for this tab
+    initializeSession();
+    
     if (connectionManager) {
       chatServiceRef.current = new ChatService(connectionManager);
       agentServiceRef.current = new AgentChatService(connectionManager);
@@ -154,7 +181,116 @@ function ChatView({ connectionManager }) {
       agentServiceRef.current.setModel(currentOption.model);
       agentServiceRef.current.setPrism(currentOption.prism);
     }
-  }, [connectionManager, selectedModelOption]);
+  }, [connectionManager]);
+
+  // Handle model changes
+  useEffect(() => {
+    const currentOption = getCurrentModelOption();
+    if (chatServiceRef.current) {
+      chatServiceRef.current.setModel(currentOption.model);
+      chatServiceRef.current.setPrism(currentOption.prism);
+    }
+    if (agentServiceRef.current) {
+      agentServiceRef.current.setModel(currentOption.model);
+      agentServiceRef.current.setPrism(currentOption.prism);
+    }
+    
+    // Update session model if we have a current session
+    if (currentSession && conversationStorageRef.current) {
+      conversationStorageRef.current.updateSessionMetadata(currentSession.id, {
+        model: currentOption.model
+      });
+    }
+  }, [selectedModelOption, currentSession]);
+
+  // Handle agent mode changes
+  useEffect(() => {
+    // Update session agent mode if we have a current session
+    if (currentSession && conversationStorageRef.current) {
+      conversationStorageRef.current.updateSessionMetadata(currentSession.id, {
+        agentMode: agentMode
+      });
+    }
+  }, [agentMode, currentSession]);
+
+  // Initialize or load conversation session
+  const initializeSession = () => {
+    if (!conversationStorageRef.current) return;
+
+    // Check if there's a session ID in the URL hash (for future use)
+    const urlHash = window.location.hash.substring(1);
+    let session = null;
+
+    if (urlHash.startsWith('session_')) {
+      // Try to load existing session from URL
+      session = conversationStorageRef.current.getSession(urlHash);
+      if (session) {
+        console.log('Loaded existing session from URL:', urlHash);
+      }
+    }
+
+    if (!session) {
+      // Create new session
+      const currentOption = getCurrentModelOption();
+      session = conversationStorageRef.current.createNewSession(currentOption.model, agentMode);
+      console.log('Created new session:', session.id);
+      
+      // Update URL hash to include session ID (optional)
+      window.location.hash = session.id;
+    } else {
+      // Restore model and agent mode from loaded session
+      console.log('Restoring session settings:', session);
+      
+      // Find the model option that matches the session's model
+      const sessionModelOption = MODEL_OPTIONS.find(option => option.model === session.model);
+      if (sessionModelOption) {
+        setSelectedModelOption(sessionModelOption.id);
+      }
+      
+      // Restore agent mode if available in session metadata
+      if (typeof session.agentMode === 'boolean') {
+        setAgentMode(session.agentMode);
+      }
+    }
+
+    setCurrentSession(session);
+    
+    // Load existing messages
+    const existingMessages = conversationStorageRef.current.getMessages(session.id);
+    setMessages(existingMessages);
+    
+    // Update browser tab title
+    updateTabTitle(session.title);
+  };
+
+  // Update browser tab title
+  const updateTabTitle = (conversationTitle) => {
+    const baseTitle = 'UV Chat';
+    if (conversationTitle && conversationTitle !== 'New Conversation') {
+      document.title = `${baseTitle} - ${conversationTitle}`;
+    } else {
+      document.title = baseTitle;
+    }
+  };
+
+  // Save message to storage
+  const saveMessageToStorage = (message) => {
+    if (currentSession && conversationStorageRef.current) {
+      const savedMessage = conversationStorageRef.current.saveMessage(currentSession.id, message);
+      
+      // Update tab title if this was the first message
+      if (messages.length === 0 && message.role === 'user') {
+        const updatedSession = conversationStorageRef.current.getSession(currentSession.id);
+        if (updatedSession) {
+          setCurrentSession(updatedSession);
+          updateTabTitle(updatedSession.title);
+        }
+      }
+      
+      return savedMessage;
+    }
+    return message;
+  };
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -184,16 +320,22 @@ function ChatView({ connectionManager }) {
     const userMessage = inputValue.trim();
     setInputValue('');
     
+    // Create and save user message
+    const userMessageObj = { role: 'user', content: userMessage };
+    const savedUserMessage = saveMessageToStorage(userMessageObj);
+    
     // Add user message to chat
     const updatedMessages = [
       ...messages,
-      { role: 'user', content: userMessage }
+      savedUserMessage
     ];
     setMessages(updatedMessages);
     
     // Start AI response
     setIsTyping(true);
     setError(null);
+    setLastFailedPrompt(null);
+    setLastFailedContextFiles([]);
     
     try {
       if (agentMode) {
@@ -205,11 +347,12 @@ function ChatView({ connectionManager }) {
           if (processedEvent) {
             switch (processedEvent.display) {
               case 'message':
+                const assistantMessage = { role: 'assistant', content: processedEvent.content, type: 'ai_response' };
+                const savedAssistantMessage = saveMessageToStorage(assistantMessage);
                 setMessages(currentMessages => [
                   ...currentMessages,
-                  { role: 'assistant', content: processedEvent.content, type: 'ai_response' }
+                  savedAssistantMessage
                 ]);
-                setIsTyping(false);
                 break;
               case 'reasoning':
                 setMessages(currentMessages => {
@@ -225,14 +368,34 @@ function ChatView({ connectionManager }) {
                 setAgentProgress(current => [...current, processedEvent.content]);
                 break;
               case 'action_result':
+                // Clear progress notifications when action completes
+                setAgentProgress(current => {
+                  // Remove progress notifications related to this action
+                  const actionDescription = processedEvent.action.description;
+                  return current.filter(progress => 
+                    !progress.includes(actionDescription) && 
+                    !progress.includes('Executing:') &&
+                    !progress.includes('✓') &&
+                    !progress.includes('✗')
+                  );
+                });
+                
+                // Create and save action result message
+                const actionResultMessage = { 
+                  role: 'system', 
+                  content: processedEvent, 
+                  type: 'action_result'
+                };
+                const savedActionResult = saveMessageToStorage(actionResultMessage);
+                
                 setMessages(currentMessages => [
                   ...currentMessages,
-                  { 
-                    role: 'system', 
-                    content: processedEvent, 
-                    type: 'action_result'
-                  }
+                  savedActionResult
                 ]);
+                break;
+              case 'usage':
+                // Handle usage data from agent mode
+                setTokenUsage(processedEvent.usage);
                 break;
               case 'completion':
                 setIsTyping(false);
@@ -242,7 +405,7 @@ function ChatView({ connectionManager }) {
           }
         };
         
-        await agentServiceRef.current.sendMessage(userMessage, contextFiles, onEvent);
+        await agentServiceRef.current.sendMessage(updatedMessages, userMessage, contextFiles, onEvent);
       } else {
         // Direct AI mode: handle token streaming from bedrock
         const assistantMessageIndex = updatedMessages.length;
@@ -263,17 +426,39 @@ function ChatView({ connectionManager }) {
             });
           }
         };
+
+        const onUsage = (usage) => {
+          if (usage) {
+            setTokenUsage(usage);
+          }
+        };
         
         await chatServiceRef.current.sendMessage(
           updatedMessages,
           userMessage,
           contextFiles,
-          onToken
+          onToken,
+          onUsage
         );
+        
+        // Save the completed assistant message to storage
+        setMessages(currentMessages => {
+          const lastMessage = currentMessages[currentMessages.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            const savedMessage = saveMessageToStorage(lastMessage);
+            const newMessages = [...currentMessages];
+            newMessages[newMessages.length - 1] = savedMessage;
+            return newMessages;
+          }
+          return currentMessages;
+        });
       }
       
       setIsTyping(false);
     } catch (err) {
+      // Store failed prompt and context for retry functionality
+      setLastFailedPrompt(userMessage);
+      setLastFailedContextFiles([...contextFiles]);
       setError(`Error: ${err.message}`);
       setIsTyping(false);
     }
@@ -283,7 +468,333 @@ function ChatView({ connectionManager }) {
   const handleClearConversation = () => {
     setMessages([]);
     setError(null);
+    setLastFailedPrompt(null);
+    setLastFailedContextFiles([]);
     setExpandedActions({}); // Clear expanded actions state
+  };
+
+  // Retry the last failed prompt
+  const handleRetry = async () => {
+    if (!lastFailedPrompt) return;
+    
+    // Clear error state
+    setError(null);
+    
+    // Retry with the exact same prompt and context files
+    const userMessage = lastFailedPrompt;
+    const retryContextFiles = lastFailedContextFiles;
+    
+    // Don't add the user message again - it's already in the conversation
+    const updatedMessages = [...messages];
+    
+    // Start AI response
+    setIsTyping(true);
+    
+    try {
+      if (agentMode) {
+        // Agent mode retry
+        setAgentProgress([]);
+        
+        const onEvent = (eventData) => {
+          const processedEvent = agentServiceRef.current.processEvent(eventData);
+          if (processedEvent) {
+            switch (processedEvent.display) {
+              case 'message':
+                const assistantMessage = { role: 'assistant', content: processedEvent.content, type: 'ai_response' };
+                const savedAssistantMessage = saveMessageToStorage(assistantMessage);
+                setMessages(currentMessages => [
+                  ...currentMessages,
+                  savedAssistantMessage
+                ]);
+                break;
+              case 'reasoning':
+                setMessages(currentMessages => {
+                  const newMessages = [...currentMessages];
+                  const lastMessage = newMessages[newMessages.length - 1];
+                  if (lastMessage && lastMessage.role === 'assistant') {
+                    lastMessage.reasoning = processedEvent.content;
+                  }
+                  return newMessages;
+                });
+                break;
+              case 'progress':
+                setAgentProgress(current => [...current, processedEvent.content]);
+                break;
+              case 'action_result':
+                setAgentProgress(current => {
+                  const actionDescription = processedEvent.action.description;
+                  return current.filter(progress => 
+                    !progress.includes(actionDescription) && 
+                    !progress.includes('Executing:') &&
+                    !progress.includes('✓') &&
+                    !progress.includes('✗')
+                  );
+                });
+                
+                const actionResultMessage = { 
+                  role: 'system', 
+                  content: processedEvent, 
+                  type: 'action_result'
+                };
+                const savedActionResult = saveMessageToStorage(actionResultMessage);
+                
+                setMessages(currentMessages => [
+                  ...currentMessages,
+                  savedActionResult
+                ]);
+                break;
+              case 'usage':
+                setTokenUsage(processedEvent.usage);
+                break;
+              case 'completion':
+                setIsTyping(false);
+                setAgentProgress([]);
+                break;
+            }
+          }
+        };
+        
+        await agentServiceRef.current.sendMessage(updatedMessages, userMessage, retryContextFiles, onEvent);
+      } else {
+        // Direct AI mode retry
+        const assistantMessageIndex = updatedMessages.length;
+        setMessages([...updatedMessages, { role: 'assistant', content: '' }]);
+        
+        const onToken = (data) => {
+          if (data && data.token) {
+            setMessages(currentMessages => {
+              const newMessages = [...currentMessages];
+              if (newMessages[assistantMessageIndex].content === '') {
+                setIsTyping(false);
+              }
+              newMessages[assistantMessageIndex] = {
+                ...newMessages[assistantMessageIndex],
+                content: newMessages[assistantMessageIndex].content + data.token
+              };
+              return newMessages;
+            });
+          }
+        };
+
+        const onUsage = (usage) => {
+          if (usage) {
+            setTokenUsage(usage);
+          }
+        };
+        
+        await chatServiceRef.current.sendMessage(
+          updatedMessages,
+          userMessage,
+          retryContextFiles,
+          onToken,
+          onUsage
+        );
+        
+        setMessages(currentMessages => {
+          const lastMessage = currentMessages[currentMessages.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            const savedMessage = saveMessageToStorage(lastMessage);
+            const newMessages = [...currentMessages];
+            newMessages[newMessages.length - 1] = savedMessage;
+            return newMessages;
+          }
+          return currentMessages;
+        });
+      }
+      
+      // Clear retry state on success
+      setLastFailedPrompt(null);
+      setLastFailedContextFiles([]);
+      setIsTyping(false);
+    } catch (err) {
+      // Keep the same failed prompt for another retry attempt
+      setError(`Error: ${err.message}`);
+      setIsTyping(false);
+    }
+  };
+
+  // Edit and retry the last failed prompt
+  const handleEditAndRetry = () => {
+    if (!lastFailedPrompt) return;
+    
+    // Pre-fill the input with the failed prompt
+    setInputValue(lastFailedPrompt);
+    
+    // Restore the context files that were used
+    setContextFiles([...lastFailedContextFiles]);
+    
+    // Clear error state
+    setError(null);
+    setLastFailedPrompt(null);
+    setLastFailedContextFiles([]);
+  };
+
+  // Clear error and continue normally
+  const handleContinue = () => {
+    setError(null);
+    setLastFailedPrompt(null);
+    setLastFailedContextFiles([]);
+  };
+
+  // Handle message deletion with two-click confirmation
+  const handleDeleteMessage = (messageId, messageIndex) => {
+    if (deleteConfirmId === messageId) {
+      // Second click - actually delete the message
+      const updatedMessages = messages.filter((_, index) => index !== messageIndex);
+      setMessages(updatedMessages);
+      
+      // Update storage
+      if (currentSession && conversationStorageRef.current && messageId) {
+        conversationStorageRef.current.deleteMessage(currentSession.id, messageId);
+        
+        // Update session in state if title changed
+        const updatedSession = conversationStorageRef.current.getSession(currentSession.id);
+        if (updatedSession) {
+          setCurrentSession(updatedSession);
+          updateTabTitle(updatedSession.title);
+        }
+      }
+      
+      // Clear token usage since we can't recalculate it on frontend
+      setTokenUsage(null);
+      
+      // Clear confirmation state
+      setDeleteConfirmId(null);
+      
+      console.log('Deleted message:', messageId);
+    } else {
+      // First click - show confirmation
+      setDeleteConfirmId(messageId);
+      // Auto-cancel confirmation after 3 seconds
+      setTimeout(() => {
+        setDeleteConfirmId(null);
+      }, 3000);
+    }
+  };
+
+  // Handle context reduction by summarizing conversation
+  const handleReduceContext = async () => {
+    if (messages.length === 0 || isTyping) return;
+    
+    setIsTyping(true);
+    setError(null);
+    
+    try {
+      // Create summarization prompt
+      const summaryPrompt = `The user requested to compress the context / prompt. Please provide a comprehensive but concise summary of our conversation that preserves all important context, decisions, information, and user preferences needed to continue our discussion effectively. Focus on:
+
+1. Key topics and decisions made
+2. Important information shared
+3. User preferences or requirements established
+4. Context needed for future responses
+5. Any ongoing tasks or objectives
+
+Please format this as a clear, well-organized summary that maintains conversation continuity.`;
+
+      let summaryContent = '';
+      
+      if (agentMode) {
+        // Agent mode summarization
+        setAgentProgress(['Summarizing conversation...']);
+        
+        const onEvent = (eventData) => {
+          const processedEvent = agentServiceRef.current.processEvent(eventData);
+          if (processedEvent) {
+            switch (processedEvent.display) {
+              case 'message':
+                summaryContent += processedEvent.content;
+                break;
+              case 'usage':
+                setTokenUsage(processedEvent.usage);
+                break;
+              case 'completion':
+                setIsTyping(false);
+                setAgentProgress([]);
+                break;
+            }
+          }
+        };
+        
+        await agentServiceRef.current.sendMessage(messages, summaryPrompt, contextFiles, onEvent);
+      } else {
+        // Direct AI mode summarization
+        const onToken = (data) => {
+          if (data && data.token) {
+            summaryContent += data.token;
+          }
+        };
+
+        const onUsage = (usage) => {
+          if (usage) {
+            setTokenUsage(usage);
+          }
+        };
+        
+        await chatServiceRef.current.sendMessage(
+          messages,
+          summaryPrompt,
+          contextFiles,
+          onToken,
+          onUsage
+        );
+      }
+      
+      // Create summary message
+      const summaryMessage = {
+        role: 'system',
+        content: `**📋 Conversation Summary**\n\n${summaryContent}`,
+        type: 'summary',
+        timestamp: new Date().toISOString()
+      };
+      
+      // Save summary message to storage
+      const savedSummaryMessage = saveMessageToStorage(summaryMessage);
+      
+      // Keep the last user message and replace everything else with summary
+      const lastUserMessageIndex = messages.length - 1;
+      let messagesToKeep = [];
+      
+      // Find the last user message to preserve continuity
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          messagesToKeep = messages.slice(i); // Keep from last user message onwards
+          break;
+        }
+      }
+      
+      // If no user message found, just use the summary
+      if (messagesToKeep.length === 0) {
+        messagesToKeep = [];
+      }
+      
+      // Replace conversation with summary + recent messages
+      const newMessages = [savedSummaryMessage, ...messagesToKeep];
+      setMessages(newMessages);
+      
+      // Update storage with reduced conversation
+      if (currentSession && conversationStorageRef.current) {
+        // Clear existing messages and save new reduced set
+        conversationStorageRef.current.clearMessages(currentSession.id);
+        newMessages.forEach(msg => {
+          conversationStorageRef.current.saveMessage(currentSession.id, msg);
+        });
+        
+        // Update session metadata
+        const updatedSession = conversationStorageRef.current.getSession(currentSession.id);
+        if (updatedSession) {
+          setCurrentSession(updatedSession);
+          updateTabTitle(updatedSession.title);
+        }
+      }
+      
+      console.log('Context reduced successfully');
+      setIsTyping(false);
+      
+    } catch (err) {
+      setError(`Failed to reduce context: ${err.message}`);
+      setIsTyping(false);
+      setAgentProgress([]);
+    }
   };
 
   // Toggle action expansion
@@ -550,16 +1061,21 @@ function ChatView({ connectionManager }) {
   // Render a message bubble
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
+    const messageId = message.id;
     
     if (isUser) {
-      // User messages remain the same
+      // User messages with delete button
       return (
         <Box
           key={index}
           sx={{
             display: 'flex',
             justifyContent: 'flex-end',
-            mb: 2
+            mb: 2,
+            position: 'relative',
+            '&:hover .delete-button': {
+              opacity: 1
+            }
           }}
         >
           <Paper
@@ -571,20 +1087,237 @@ function ChatView({ connectionManager }) {
               bgcolor: 'primary.dark',
               color: 'primary.contrastText',
               borderTopRightRadius: 0,
-              borderTopLeftRadius: 2
+              borderTopLeftRadius: 2,
+              position: 'relative'
             }}
           >
             <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
               {message.content}
             </Typography>
+            
+            {/* Delete button */}
+            <Tooltip title={deleteConfirmId === messageId ? "Click again to confirm" : "Delete message"}>
+              <IconButton
+                className="delete-button"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteMessage(messageId, index);
+                }}
+                sx={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  color: deleteConfirmId === messageId ? 'error.main' : 'rgba(255, 255, 255, 0.7)',
+                  bgcolor: 'rgba(0, 0, 0, 0.2)',
+                  '&:hover': {
+                    bgcolor: 'rgba(0, 0, 0, 0.4)',
+                    color: deleteConfirmId === messageId ? 'error.main' : 'white'
+                  }
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Paper>
         </Box>
       );
     } else if (message.role === 'system' && message.type === 'action_result') {
-      // Render action result cards for agent mode
-      return renderActionResult(message, index);
+      // Render action result cards for agent mode with delete button
+      return (
+        <Box key={index} sx={{ mb: 2, display: 'flex', justifyContent: 'flex-start', position: 'relative', '&:hover .delete-button': { opacity: 1 } }}>
+          <Card 
+            elevation={2}
+            sx={{ 
+              maxWidth: '80%',
+              border: message.content.success ? '1px solid #4caf50' : '1px solid #f44336',
+              borderRadius: 2,
+              position: 'relative'
+            }}
+          >
+            <Box sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                {message.content.success ? (
+                  <CheckCircleIcon sx={{ color: 'success.main', mr: 1 }} />
+                ) : (
+                  <ErrorIcon sx={{ color: 'error.main', mr: 1 }} />
+                )}
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', flex: 1 }}>
+                  {message.content.action.prism} · {message.content.action.frequency}
+                </Typography>
+                
+                {/* Toggle button for data/error visibility */}
+                {((message.content.success && message.content.data) || (!message.content.success && message.content.error)) && (
+                  <IconButton
+                    size="small"
+                    onClick={() => toggleActionExpanded(index)}
+                    sx={{ ml: 1 }}
+                  >
+                    {expandedActions[index] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  </IconButton>
+                )}
+              </Box>
+              
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {message.content.action.description}
+              </Typography>
+              
+              {/* Show summary when collapsed */}
+              {!expandedActions[index] && message.content.success && message.content.data && (
+                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  Result available - click to expand
+                </Typography>
+              )}
+              
+              {!expandedActions[index] && !message.content.success && message.content.error && (
+                <Typography variant="caption" color="error.main" sx={{ fontStyle: 'italic' }}>
+                  Error details available - click to expand
+                </Typography>
+              )}
+              
+              {/* Collapsible result data */}
+              <Collapse in={expandedActions[index]}>
+                {message.content.success && message.content.data && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Result:
+                    </Typography>
+                    <Paper 
+                      sx={{ 
+                        p: 1, 
+                        mt: 0.5, 
+                        bgcolor: 'rgba(76, 175, 80, 0.05)',
+                        border: '1px solid rgba(76, 175, 80, 0.2)',
+                        maxHeight: '300px',
+                        overflowY: 'auto'
+                      }}
+                    >
+                      <Typography variant="body2" component="pre" sx={{ 
+                        whiteSpace: 'pre-wrap',
+                        fontSize: '0.8rem',
+                        fontFamily: 'monospace'
+                      }}>
+                        {JSON.stringify(message.content.data, null, 2)}
+                      </Typography>
+                    </Paper>
+                  </Box>
+                )}
+                
+                {!message.content.success && message.content.error && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" color="error.main">
+                      Error:
+                    </Typography>
+                    <Paper 
+                      sx={{ 
+                        p: 1, 
+                        mt: 0.5,
+                        bgcolor: 'rgba(244, 67, 54, 0.05)',
+                        border: '1px solid rgba(244, 67, 54, 0.2)'
+                      }}
+                    >
+                      <Typography variant="body2" color="error.main">
+                        {message.content.error}
+                      </Typography>
+                    </Paper>
+                  </Box>
+                )}
+              </Collapse>
+            </Box>
+            
+            {/* Delete button for action result */}
+            <Tooltip title={deleteConfirmId === messageId ? "Click again to confirm" : "Delete message"}>
+              <IconButton
+                className="delete-button"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteMessage(messageId, index);
+                }}
+                sx={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  color: deleteConfirmId === messageId ? 'error.main' : 'text.secondary',
+                  bgcolor: 'rgba(255, 255, 255, 0.8)',
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 1)',
+                    color: deleteConfirmId === messageId ? 'error.main' : 'text.primary'
+                  }
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Card>
+        </Box>
+      );
+    } else if (message.role === 'system' && message.type === 'summary') {
+      // Render summary messages with special styling
+      return (
+        <Box
+          key={index}
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            mb: 2,
+            position: 'relative',
+            '&:hover .delete-button': {
+              opacity: 1
+            }
+          }}
+        >
+          <Paper
+            elevation={2}
+            sx={{
+              p: 2,
+              maxWidth: '90%',
+              borderRadius: 2,
+              bgcolor: 'rgba(255, 193, 7, 0.1)',
+              color: 'text.primary',
+              border: '2px solid rgba(255, 193, 7, 0.3)',
+              position: 'relative'
+            }}
+          >
+            <ReactMarkdown components={MarkdownComponents}>
+              {message.content}
+            </ReactMarkdown>
+            
+            {/* Delete button for summary messages */}
+            <Tooltip title={deleteConfirmId === messageId ? "Click again to confirm" : "Delete summary"}>
+              <IconButton
+                className="delete-button"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteMessage(messageId, index);
+                }}
+                sx={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  color: deleteConfirmId === messageId ? 'error.main' : 'text.secondary',
+                  bgcolor: 'rgba(255, 255, 255, 0.8)',
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 1)',
+                    color: deleteConfirmId === messageId ? 'error.main' : 'text.primary'
+                  }
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Paper>
+        </Box>
+      );
     } else {
-      // Process assistant messages to handle reasoning sections
+      // Process assistant messages to handle reasoning sections with delete button
       const processedContent = processMessageContent(message.content);
       
       return (
@@ -593,7 +1326,11 @@ function ChatView({ connectionManager }) {
           sx={{
             display: 'flex',
             justifyContent: 'flex-start',
-            mb: 2
+            mb: 2,
+            position: 'relative',
+            '&:hover .delete-button': {
+              opacity: 1
+            }
           }}
         >
           <Paper
@@ -606,7 +1343,8 @@ function ChatView({ connectionManager }) {
               color: 'text.primary',
               borderTopRightRadius: 2,
               borderTopLeftRadius: 0,
-              borderLeft: message.type === 'ai_response' && agentMode ? '4px solid #1976d2' : 'none'
+              borderLeft: message.type === 'ai_response' && agentMode ? '4px solid #1976d2' : 'none',
+              position: 'relative'
             }}
           >
             {message.type === 'ai_response' && agentMode && (
@@ -704,6 +1442,33 @@ function ChatView({ connectionManager }) {
                 </ReactMarkdown>
               </Box>
             )}
+            
+            {/* Delete button for assistant messages */}
+            <Tooltip title={deleteConfirmId === messageId ? "Click again to confirm" : "Delete message"}>
+              <IconButton
+                className="delete-button"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteMessage(messageId, index);
+                }}
+                sx={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  color: deleteConfirmId === messageId ? 'error.main' : 'text.secondary',
+                  bgcolor: 'rgba(255, 255, 255, 0.8)',
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 1)',
+                    color: deleteConfirmId === messageId ? 'error.main' : 'text.primary'
+                  }
+                }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Paper>
         </Box>
       );
@@ -766,7 +1531,40 @@ function ChatView({ connectionManager }) {
             </Select>
           </FormControl>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          {/* Token usage display */}
+          {tokenUsage ? (
+            <Tooltip title={`Context window usage: ${tokenUsage.prompt_tokens} / ${getCurrentModelOption().contextLimit} tokens`}>
+              <Chip
+                label={`${tokenUsage.prompt_tokens.toLocaleString()} tokens`}
+                size="small"
+                color={tokenUsage.prompt_tokens > getCurrentModelOption().contextLimit * 0.8 ? "warning" : "default"}
+                variant="outlined"
+                sx={{ mr: 1 }}
+              />
+            </Tooltip>
+          ) : (
+            messages.length > 0 && (
+              <Tooltip title="Token usage will update after next AI response">
+                <Chip
+                  label="Token usage will refresh"
+                  size="small"
+                  color="default"
+                  variant="outlined"
+                  sx={{ mr: 1, fontStyle: 'italic' }}
+                />
+              </Tooltip>
+            )
+          )}
+          
+          <Tooltip title="Conversation History">
+            <IconButton 
+              color="inherit"
+              onClick={() => setHistoryDialogOpen(true)}
+            >
+              <HistoryIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Context Files">
             <IconButton 
               color={contextFiles.length > 0 ? "primary" : "inherit"}
@@ -783,6 +1581,15 @@ function ChatView({ connectionManager }) {
               onClick={() => setShowReasoning(!showReasoning)}
             >
               <PsychologyIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Reduce context by summarizing conversation">
+            <IconButton 
+              color="inherit"
+              onClick={handleReduceContext}
+              disabled={messages.length === 0 || isTyping}
+            >
+              <CompressIcon />
             </IconButton>
           </Tooltip>
           <IconButton 
@@ -808,6 +1615,12 @@ function ChatView({ connectionManager }) {
         onRemoveFile={(fileId) => {
           setContextFiles(contextFiles.filter(file => file.id !== fileId));
         }}
+      />
+      
+      {/* Conversation History Dialog */}
+      <ConversationHistory
+        open={historyDialogOpen}
+        onClose={() => setHistoryDialogOpen(false)}
       />
       
       {/* Messages area */}
@@ -887,7 +1700,7 @@ function ChatView({ connectionManager }) {
           </Box>
         )}
         
-        {/* Error message */}
+        {/* Enhanced error message with retry options */}
         {error && (
           <Box
             sx={{
@@ -898,7 +1711,63 @@ function ChatView({ connectionManager }) {
               borderRadius: 1
             }}
           >
-            <Typography variant="body2">{error}</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 2 }}>
+              <ErrorIcon sx={{ mr: 1, mt: 0.25 }} />
+              <Typography variant="body2" sx={{ flex: 1 }}>
+                {error}
+              </Typography>
+            </Box>
+            
+            {/* Retry action buttons */}
+            {lastFailedPrompt && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleRetry}
+                  disabled={isTyping}
+                  sx={{ 
+                    bgcolor: 'rgba(255, 255, 255, 0.15)',
+                    color: 'inherit',
+                    '&:hover': {
+                      bgcolor: 'rgba(255, 255, 255, 0.25)'
+                    }
+                  }}
+                >
+                  Retry
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleEditAndRetry}
+                  disabled={isTyping}
+                  sx={{ 
+                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                    color: 'inherit',
+                    '&:hover': {
+                      borderColor: 'rgba(255, 255, 255, 0.5)',
+                      bgcolor: 'rgba(255, 255, 255, 0.1)'
+                    }
+                  }}
+                >
+                  Edit & Retry
+                </Button>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={handleContinue}
+                  sx={{ 
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    '&:hover': {
+                      color: 'inherit',
+                      bgcolor: 'rgba(255, 255, 255, 0.1)'
+                    }
+                  }}
+                >
+                  Continue
+                </Button>
+              </Box>
+            )}
           </Box>
         )}
         

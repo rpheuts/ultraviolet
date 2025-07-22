@@ -7,6 +7,7 @@ pub mod spectrum;
 
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 use tokio::runtime::Runtime;
 use uuid::Uuid;
@@ -85,6 +86,45 @@ impl AIContextPrism {
         Ok(result)
     }
 
+    // Get bootstrap knowledge content
+    async fn get_bootstrap_knowledge(&self) -> Result<String> {
+        let spectrum = self.spectrum.as_ref()
+            .ok_or_else(|| UVError::ExecutionError("Prism not initialized".to_string()))?;
+        
+        let tools_refraction = spectrum.find_refraction("knowledge.search")
+            .ok_or_else(|| UVError::RefractionError("knowledge.search refraction not found".to_string()))?;
+        
+        let multiplexer = uv_core::PrismMultiplexer::new();
+        
+        let link = multiplexer.refract(tools_refraction, json!({
+            "category": "bootstrap",
+            "query": ""
+        }))?;
+        
+        let result: Value = link.absorb()?;
+        
+        // Extract content fields from the result
+        let mut content_parts = Vec::new();
+        
+        match result {
+            Value::Array(items) => {
+                for item in items {
+                    if let Some(content) = item.get("content").and_then(|c| c.as_str()) {
+                        content_parts.push(content.to_string());
+                    }
+                }
+            },
+            Value::Object(_) => {
+                if let Some(content) = result.get("content").and_then(|c| c.as_str()) {
+                    content_parts.push(content.to_string());
+                }
+            },
+            _ => {}
+        }
+        
+        Ok(content_parts.join("\n\n"))
+    }
+
     /// Build enriched prompt with UV system context
     async fn build_enriched_prompt(&self, user_prompt: &str, prisms: &[PrismInfo], include_examples: bool) -> Result<String> {
         let mut capabilities = String::new();
@@ -116,36 +156,51 @@ impl AIContextPrism {
                 }
             }
         }
+
+        let knowledge = self.get_bootstrap_knowledge().await?;
+        let now: DateTime<Utc> = Utc::now();
         
         Ok(PROMPT_TEMPLATE
             .replace("{prism_capabilities}", &capabilities)
-            .replace("{user_prompt}", user_prompt))
+            .replace("{user_prompt}", user_prompt)
+            .replace("{date_time}", &now.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+            .replace("{timestamp}", &now.timestamp().to_string())
+            .replace("{bootstrap_knowledge}", &knowledge))
     }
 
-    /// Stream response from bedrock
-    async fn stream_from_bedrock(&self, id: Uuid, prompt: String, model: Option<String>, link: &UVLink) -> Result<()> {
+    /// Stream response from AI backend (bedrock or q)
+    async fn stream_from_ai(&self, id: Uuid, prompt: String, model: Option<String>, backend: &str, link: &UVLink) -> Result<()> {
         let spectrum = self.spectrum.as_ref()
             .ok_or_else(|| UVError::ExecutionError("Prism not initialized".to_string()))?;
         
-        let bedrock_refraction = spectrum.find_refraction("bedrock.invoke_stream")
-            .ok_or_else(|| UVError::RefractionError("bedrock.invoke_stream refraction not found".to_string()))?;
+        // Determine which backend to use
+        let refraction_path = match backend {
+            "q" => "q.invoke_stream",
+            "ollama" => "ollama.invoke_stream",
+            _ => "bedrock.invoke_stream", // Default to bedrock for any other value
+        };
+
+        println!("{:?}", refraction_path);
         
-        // Create payload for bedrock
-        let mut bedrock_payload = json!({
+        let ai_refraction = spectrum.find_refraction(refraction_path)
+            .ok_or_else(|| UVError::RefractionError(format!("{} refraction not found", refraction_path)))?;
+        
+        // Create payload for AI backend
+        let mut ai_payload = json!({
             "prompt": prompt,
             "max_tokens": 4096
         });
         
         if let Some(m) = model {
-            bedrock_payload["model"] = json!(m);
+            ai_payload["model"] = json!(m);
         }
         
-        // Create multiplexer and refract to bedrock
+        // Create multiplexer and refract to AI backend
         let multiplexer = uv_core::PrismMultiplexer::new();
-        let bedrock_link = multiplexer.refract(bedrock_refraction, bedrock_payload)?;
+        let ai_link = multiplexer.refract(ai_refraction, ai_payload)?;
 
         loop {
-            match bedrock_link.receive()? {
+            match ai_link.receive()? {
                 Some((_, UVPulse::Photon(photon))) => {
                     link.emit_photon(id, photon.data)?;
                 },
@@ -185,8 +240,10 @@ impl AIContextPrism {
                 request.include_examples
             ).await?;
             
-            // Stream from bedrock
-            self.stream_from_bedrock(id, enriched_prompt, request.model, link).await?;
+            println!("Enriched prompt:\n{}", enriched_prompt);
+
+            // Stream from AI backend (bedrock or q)
+            self.stream_from_ai(id, enriched_prompt, request.model, &request.backend, link).await?;
             
             Ok::<(), UVError>(())
         })?;

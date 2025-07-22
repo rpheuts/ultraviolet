@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Button, 
-  IconButton,
   ThemeProvider, 
   ToggleButton, 
   ToggleButtonGroup, 
@@ -66,11 +65,12 @@ const theme = createTheme({
  */
 function App() {
   const [connected, setConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState('disconnected');
   const [prisms, setPrisms] = useState([]);
   const [selectedPrism, setSelectedPrism] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [currentView, setCurrentView] = useState('prisms'); // 'prisms' or 'chat'
+  const [currentView, setCurrentView] = useState('chat'); // 'prisms' or 'chat'
   
   // Use refs to maintain service instances across renders
   const connectionManagerRef = useRef(null);
@@ -81,45 +81,40 @@ function App() {
     connectionManagerRef.current = new ConnectionManager();
     prismDiscoveryRef.current = new PrismDiscovery(connectionManagerRef.current);
     
-    // Set up connection listener
-    const removeListener = connectionManagerRef.current.addConnectionListener(setConnected);
+    // Set up connection listeners
+    const removeConnectionListener = connectionManagerRef.current.addConnectionListener((isConnected) => {
+      setConnected(isConnected);
+      // Load prisms when connection is established
+      if (isConnected) {
+        loadPrisms();
+      }
+    });
     
-    // Explicitly set initial connection state to false
+    const removeStateListener = connectionManagerRef.current.addStateListener((state) => {
+      setConnectionState(state);
+    });
+    
+    // Set initial states
     setConnected(false);
+    setConnectionState('disconnected');
     
     // Connect to server
     connectionManagerRef.current.connect()
-      .then(() => loadPrisms())
       .catch(err => {
         setError(`Connection error: ${err.message}`);
-        // Ensure connected state is false on error
-        setConnected(false);
       });
       
     return () => {
-      // Clean up
-      removeListener();
+      // Clean up listeners
+      removeConnectionListener();
+      removeStateListener();
+      
+      // Disconnect when component unmounts
+      if (connectionManagerRef.current) {
+        connectionManagerRef.current.disconnect();
+      }
     };
   }, []);
-  
-  // Periodically check connection status
-  useEffect(() => {
-    // Check connection status every 2 seconds
-    const intervalId = setInterval(() => {
-      if (connectionManagerRef.current) {
-        const isConnected = connectionManagerRef.current.isConnected();
-        
-        // If connection state changed from disconnected to connected, reload prisms
-        if (isConnected && !connected) {
-          loadPrisms();
-        }
-        
-        setConnected(isConnected);
-      }
-    }, 2000);
-    
-    return () => clearInterval(intervalId);
-  }, [connected]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Load prisms when connected
   const loadPrisms = async () => {
@@ -139,15 +134,18 @@ function App() {
     }
   };
   
-  // Retry connection
-  const handleRetryConnection = () => {
+  // Handle manual reconnection
+  const handleReconnect = async () => {
     if (!connectionManagerRef.current) {
       return;
     }
     
-    connectionManagerRef.current.connect()
-      .then(() => loadPrisms())
-      .catch(err => setError(`Connection error: ${err.message}`));
+    try {
+      await connectionManagerRef.current.reconnect();
+      // loadPrisms will be called automatically via the connection listener
+    } catch (err) {
+      setError(`Reconnection failed: ${err.message}`);
+    }
   };
   
   return (
@@ -195,7 +193,11 @@ function App() {
               </ToggleButton>
             </ToggleButtonGroup>
             
-            <StatusBar connected={connected} />
+            <StatusBar 
+              connected={connected} 
+              connectionState={connectionState}
+              onReconnect={handleReconnect}
+            />
           </Box>
         </Box>
         
@@ -255,7 +257,7 @@ function App() {
                   size="small" 
                   variant="outlined" 
                   color="inherit" 
-                  onClick={handleRetryConnection}
+                  onClick={handleReconnect}
                 >
                   Retry Connection
                 </Button>

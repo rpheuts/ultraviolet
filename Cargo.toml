@@ -9,13 +9,18 @@ members = [
 
     "prisms/core/bedrock",
     "prisms/core/q",
-    "prisms/core/command",
+    "prisms/core/openrouter",
+    "prisms/core/ollama",
     "prisms/core/persistence",
     "prisms/system/discovery",
     "prisms/system/remote",
     "prisms/system/deploy",
+    "prisms/system/timer",
+    "prisms/system/datetime",
     "prisms/ai/context",
     "prisms/ai/agent",
+    "prisms/ai/knowledge",
+    "prisms/ai/mcp",
 ]
 
 [workspace.dependencies]

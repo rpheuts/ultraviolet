@@ -1,0 +1,198 @@
+{
+  "name": "mcp",
+  "namespace": "ai",
+  "version": "0.1.0",
+  "description": "Model Context Protocol (MCP) client for accessing external tools and resources",
+  "wavelengths": [
+    {
+      "frequency": "list_tools",
+      "description": "List available tools from a specific MCP server",
+      "input": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string",
+            "description": "Server name from configuration"
+          }
+        },
+        "required": ["server"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "inputSchema": {"type": "object"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "frequency": "list_resources",
+      "description": "List available resources from a specific MCP server",
+      "input": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string",
+            "description": "Server name from configuration"
+          }
+        },
+        "required": ["server"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "uri": {"type": "string"},
+                "name": {"type": "string"},
+                "description": {"type": "string"},
+                "mimeType": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "frequency": "call_tool",
+      "description": "Execute a tool on a specific MCP server",
+      "input": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string",
+            "description": "Server name from configuration"
+          },
+          "name": {
+            "type": "string",
+            "description": "Tool name to execute"
+          },
+          "arguments": {
+            "type": "object",
+            "description": "Tool arguments in a JSON object: {\"arg\": \"value\"}"
+          }
+        },
+        "required": ["server", "name"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {"type": "string"},
+                "text": {"type": "string"}
+              }
+            }
+          },
+          "isError": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "frequency": "read_resource",
+      "description": "Read a resource from a specific MCP server",
+      "input": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string",
+            "description": "Server name from configuration"
+          },
+          "uri": {
+            "type": "string",
+            "description": "Resource URI to read"
+          }
+        },
+        "required": ["server", "uri"]
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "contents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "uri": {"type": "string"},
+                "mimeType": {"type": "string"},
+                "text": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "frequency": "list_all_tools",
+      "description": "List all available tools from all configured MCP servers",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "servers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "description": {"type": "string"},
+                  "inputSchema": {"type": "object"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "frequency": "list_all_resources",
+      "description": "List all available resources from all configured MCP servers",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "servers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "uri": {"type": "string"},
+                  "name": {"type": "string"},
+                  "description": {"type": "string"},
+                  "mimeType": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

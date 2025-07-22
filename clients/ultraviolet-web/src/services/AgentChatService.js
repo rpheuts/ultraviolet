@@ -11,6 +11,7 @@ class AgentChatService {
     this.connectionManager = connectionManager;
     this.prismId = 'ai:agent'; // Agent prism ID
     this.model = null; // Optional model override
+    this.backend = 'bedrock'; // Default backend (bedrock or q)
   }
 
   /**
@@ -22,24 +23,58 @@ class AgentChatService {
   }
 
   /**
-   * Set the prism backend to use (e.g., 'core:bedrock', 'core:q')
-   * @param {string} prismId - Prism ID
+   * Set the backend preference based on the selected prism
+   * @param {string} prismId - Prism ID (e.g., 'core:bedrock', 'core:q')
    */
   setPrism(prismId) {
-    this.prismId = prismId;
+    // Agent prism ID never changes - it's always 'ai:agent'
+    // We only extract the backend preference from the selected prism
+    if (prismId === 'core:q') {
+      this.backend = 'q';
+    } else if (prismId === 'core:ollama') {
+      this.backend = 'ollama';
+    }
+    else {
+      this.backend = 'bedrock';
+    }
   }
 
   /**
-   * Send a message to the AI agent and get structured event responses
-   * @param {string} userMessage - User's natural language request
+   * Format conversation history into a prompt for the agent
+   * @param {Array} messages - Array of message objects with role and content
    * @param {Array} contextFiles - Array of file objects with name and content
-   * @param {function} onEvent - Callback for each event as it arrives
-   * @returns {Promise} Resolves when agent completes the workflow
+   * @returns {string} Formatted prompt
    */
-  sendMessage(userMessage, contextFiles, onEvent) {
-    // Build the prompt with context files if provided
-    let prompt = userMessage;
+  formatConversationPrompt(messages, contextFiles = []) {
+    if (!messages || messages.length === 0) {
+      return '';
+    }
+
+    // Format conversation messages, including action results
+    let prompt = messages.map(msg => {
+      if (msg.role === 'user') {
+        return `User: ${msg.content}`;
+      } else if (msg.role === 'assistant') {
+        return `Assistant: ${msg.content}`;
+      } else if (msg.role === 'system' && msg.type === 'action_result') {
+        // Format action results for context
+        const { action, success, data, error } = msg.content;
+        let actionSummary = `Action: ${action.prism} ${action.frequency} (${action.description})`;
+        
+        if (success && data) {
+          // Include full data without truncation
+          const dataStr = JSON.stringify(data);
+          actionSummary += ` -> Success: ${dataStr}`;
+        } else if (!success && error) {
+          actionSummary += ` -> Error: ${error}`;
+        }
+        
+        return actionSummary;
+      }
+      return '';
+    }).filter(line => line.trim()).join('\n\n');
     
+    // Add file context if available
     if (contextFiles && contextFiles.length > 0) {
       prompt += '\n\n--- Context Files ---\n';
       
@@ -49,11 +84,28 @@ class AgentChatService {
       
       prompt += '\n--- End Context Files ---\n';
     }
+    
+    return prompt;
+  }
+
+  /**
+   * Send a message to the AI agent and get structured event responses
+   * @param {Array} conversationHistory - Array of previous messages
+   * @param {string} userMessage - User's natural language request
+   * @param {Array} contextFiles - Array of file objects with name and content
+   * @param {function} onEvent - Callback for each event as it arrives
+   * @returns {Promise} Resolves when agent completes the workflow
+   */
+  sendMessage(conversationHistory, userMessage, contextFiles, onEvent) {
+    // Format only the previous conversation history (not including current user message)
+    // The current user message will be included via the prompt template's {user_prompt} placeholder
+    const prompt = this.formatConversationPrompt(conversationHistory, contextFiles);
 
     // Prepare the input for the agent prism
     const input = {
       prompt,
-      include_examples: true
+      include_examples: true,
+      backend: this.backend
     };
     
     // Add model if specified
@@ -76,6 +128,27 @@ class AgentChatService {
    * @returns {Object} Processed event with display information
    */
   processEvent(eventData) {
+    // Handle raw token/usage data (not structured agent events)
+    if (eventData && eventData.token !== undefined) {
+      // This is a token stream event, possibly with usage data
+      if (eventData.usage) {
+        return {
+          type: 'usage',
+          usage: eventData.usage,
+          display: 'usage'
+        };
+      } else if (eventData.token) {
+        // Regular token for streaming
+        return {
+          type: 'token',
+          token: eventData.token,
+          display: 'token'
+        };
+      }
+      return null;
+    }
+
+    // Handle structured agent events
     if (!eventData || !eventData.type) {
       return null;
     }
