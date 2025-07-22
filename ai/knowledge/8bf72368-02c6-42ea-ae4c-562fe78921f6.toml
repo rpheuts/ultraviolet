@@ -1,0 +1,57 @@
+id = "8bf72368-02c6-42ea-ae4c-562fe78921f6"
+content = """
+## Desktop Commander MCP Server
+
+The desktop-commander MCP server provides local system access and file management capabilities:
+
+### File Operations
+- Read files and directories with read_file and list_directory
+- Write and modify files using write_file and edit_block
+- Create directories with create_directory
+- Move/rename files with move_file
+- Search files by name or content using search_files and search_code
+- Get file metadata with get_file_info
+
+### Process Management
+- Execute commands with execute_command
+- List running processes with list_processes
+- Manage terminal sessions with list_sessions, read_output, and force_terminate
+- Terminate processes using kill_process
+
+### Configuration
+- View server configuration with get_config
+- Modify settings with set_config_value
+
+### Security Features
+- File operations restricted to allowed directories
+- Commands can be blocked based on configuration
+- Support for text and image files (PNG, JPEG, GIF, WebP)
+- Built-in timeouts for long-running operations
+
+Example usage:
+json
+{
+  "actions": [
+    {
+      "prism": "ai:mcp",
+      "frequency": "call_tool",
+      "input": {
+        "server": "desktop-commander",
+        "name": "list_directory",
+        "arguments": {
+          "path": "/some/path"
+        }
+      }
+    }
+  ]
+}
+"""
+tags = [
+    "mcp",
+    "desktop-commander",
+    "file-operations",
+    "process-management",
+]
+category = "bootstrap"
+created_at = "2025-07-15T19:51:10.139013Z"
+updated_at = "2025-07-15T19:51:10.139013Z"
